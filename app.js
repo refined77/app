@@ -653,7 +653,7 @@ async function askLinnaeus(payload){
       headers:{"content-type":"application/json","authorization":"Bearer "+tok},
       body:JSON.stringify(payload)});
     const j=await r.json().catch(()=>null);
-    if(!r.ok) return {error:(j&&j.error)||("Linnaeus error ("+r.status+")")};
+    if(!r.ok) return {error:((j&&j.error)||("Linnaeus error ("+r.status+")")) + (j&&j.detail?(" — "+j.detail):"")};
     return j;
   }catch(e){ return {error:"Couldn't reach Linnaeus (is the app deployed?)."}; }
 }
