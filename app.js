@@ -69,7 +69,7 @@ function go(name){
   document.querySelectorAll(".nav button").forEach(b=> b.classList.toggle("active", b.dataset.go===name));
   if(name==="today") loadToday();
   if(name==="collection") loadCollection();
-  if(name==="add"){ prepAdd(); setupSmartForm(); }
+  if(name==="add"){ setupAddForm(); }
   if(name==="supplies") loadSupplies();
 }
 document.querySelectorAll(".nav button").forEach(b=> b.onclick=()=>{ if(b.dataset.go==='collection') collFilter=null; go(b.dataset.go); });
@@ -103,6 +103,7 @@ async function loadToday(){
   const needs = active.map(p=>({p, days: lastW[p.id]? Math.floor((now-lastW[p.id])/DAY) : null}))
     .filter(x=> x.days===null || x.days>=7)
     .sort((a,b)=> (b.days===null?99999:b.days)-(a.days===null?99999:a.days));
+  window.__todaySummary = `Collection ${total} plants; quarantine ${quarantine}; ready to sell ${ready}; mother plants ${mothers}. Needs check/water (${needs.length}): ` + (needs.slice(0,10).map(x=>`${x.p.unique_name||x.p.common_name||'Unnamed'} (${x.days===null?'no water logged':x.days+'d since water'})`).join('; ')||'none') + '.';
   $("today-body").innerHTML = `
     <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr));">
       ${tile("In the collection", total, 'all')}
@@ -110,6 +111,10 @@ async function loadToday(){
       ${tile("In quarantine", quarantine, 'Quarantine')}
       ${tile("Ready to sell", ready, 'Ready to Sell')}
       ${tile("Mother plants", mothers, 'Mother Plant')}
+    </div>
+    <div class="section-t"><div class="label flank" style="justify-content:flex-start;">LINNAEUS — TODAY</div>
+      <div style="margin-top:10px;"><button type="button" class="btn btn-sm btn-gold" onclick="todayBrief()">✦ What needs attention</button></div>
+      <div id="ai-today" class="roomnote" style="display:none;margin-top:10px;white-space:pre-wrap;"></div>
     </div>
     <div class="section-t"><div class="label flank" style="justify-content:flex-start;">CHECK &amp; WATER</div>
       <div style="margin-top:10px;">${ needs.length ? needs.slice(0,12).map(x=>`
@@ -175,38 +180,344 @@ function renderColl(plants){
 }
 
 /* ---------- ADD ---------- */
-async function prepAdd(){
-  $("f-date").value = new Date().toISOString().slice(0,10);
-  const plants = CACHE.length? CACHE : await fetchPlants();
-  const sel=$("f-mother");
-  sel.innerHTML = `<option value="">— None (this is a founder) —</option>` +
-    plants.map(p=>`<option value="${p.id}">${p.unique_name||p.common_name||"Unnamed"} (${lineageCode(p)})</option>`).join("");
+/* type → what the form asks for */
+const ACQ = {
+  "Purchased":           {mother:false, vendor:true,  needMother:false, needVendor:true},
+  "Trade / Gift":        {mother:false, vendor:true,  needMother:false, needVendor:true},
+  "Tissue culture":      {mother:false, vendor:true,  needMother:false, needVendor:true},
+  "Cutting":             {mother:true,  vendor:true,  needMother:false, needVendor:false, oneOf:true},
+  "Division":            {mother:true,  vendor:false, needMother:true,  needVendor:false},
+  "Our own propagation": {mother:true,  vendor:false, needMother:true,  needVendor:false},
+};
+const ZONES = ["Rack 1","Rack 2","Rack 3","Hoya Bench (south window)","Glass case (velvet aroids)","Quarantine","Outdoors (aloe)","Other"];
+const SHELVES = ["Shelf 1 — top (low light / storage)","Shelf 2 (grow light)","Shelf 3 (grow light)","Shelf 4 (grow light)","Shelf 5 (grow light)"];
+const POTS = ["Clear glass","Weathered terracotta","Matte black","Clear plastic (nursery)","Net pot (semi-hydro)","Other"];
+const CONDS = ["Healthy","Minor stress","Rootbound","Dehydrated","Pest seen","Disease seen","Shipping damage","Other"];
+const ADMINS = ["michi"];   // login name(s) allowed to see/enter pricing — add Laura etc. here later
+function isAdmin(){ return ADMINS.indexOf((window.ME||"").toLowerCase())>=0; }
+let condSel = new Set();
+let VENDORS = [];
+let addWired = false;
+let addPhotoFile = null;
+let verifyOK = false;
+
+function fillCultivars(){
+  const sel=$("f-cultivar"); if(!sel) return;
+  const set=new Set();
+  SPECIES.forEach(s=>{ if(s.cultivar) set.add(s.cultivar); });
+  (CACHE||[]).forEach(p=>{ if(p.cultivar) set.add(p.cultivar); });
+  const cur=sel.value, arr=[...set].sort((a,b)=>a.localeCompare(b));
+  sel.innerHTML = `<option value="">— None —</option>` +
+    arr.map(c=>`<option value="${escAttr(c)}">${c}</option>`).join("") +
+    `<option value="__add__">＋ Add new cultivar…</option>`;
+  if(cur && arr.indexOf(cur)>=0) sel.value=cur;
 }
-$("add-form").onsubmit = async (e)=>{
+function ensureCultivar(name){
+  if(!name) return; const sel=$("f-cultivar");
+  if(![...sel.options].some(o=>o.value===name)) sel.add(new Option(name,name), sel.options[sel.options.length-1]);
+  sel.value=name;
+}
+/* Photo policing — bounce dark / overexposed / blurry / low-res shots. Heuristic, dial in PHOTO_MIN_* if needed. */
+const PHOTO_MIN_LONGEDGE=1200, PHOTO_DARK=42, PHOTO_BRIGHT=226, PHOTO_BLUR=45;
+function checkPhotoQuality(file){
+  return new Promise(resolve=>{
+    const img=new Image();
+    img.onload=()=>{
+      const W=img.naturalWidth, H=img.naturalHeight, long=Math.max(W,H);
+      const scale=Math.min(1, 256/long), cw=Math.max(2,Math.round(W*scale)), ch=Math.max(2,Math.round(H*scale));
+      const c=document.createElement("canvas"); c.width=cw; c.height=ch;
+      const ctx=c.getContext("2d"); ctx.drawImage(img,0,0,cw,ch);
+      let d; try{ d=ctx.getImageData(0,0,cw,ch).data; }catch(e){ resolve({ok:true}); return; }
+      const lum=new Float64Array(cw*ch); let sum=0;
+      for(let i=0,p=0;i<d.length;i+=4,p++){ const y=0.299*d[i]+0.587*d[i+1]+0.114*d[i+2]; lum[p]=y; sum+=y; }
+      const mean=sum/(cw*ch);
+      let ls=0, lsq=0, n=0;
+      for(let y=1;y<ch-1;y++) for(let x=1;x<cw-1;x++){ const p=y*cw+x;
+        const lap=4*lum[p]-lum[p-1]-lum[p+1]-lum[p-cw]-lum[p+cw]; ls+=lap; lsq+=lap*lap; n++; }
+      const lvar = n? (lsq/n)-Math.pow(ls/n,2) : 999;
+      const issues=[];
+      if(long<PHOTO_MIN_LONGEDGE) issues.push("too small / low-res (looks like a screenshot or thumbnail)");
+      if(mean<PHOTO_DARK) issues.push("too dark — add light");
+      else if(mean>PHOTO_BRIGHT) issues.push("overexposed — too bright");
+      if(lvar<PHOTO_BLUR) issues.push("blurry or out of focus — hold steady");
+      resolve({ok:issues.length===0, issues});
+    };
+    img.onerror=()=>resolve({ok:true});
+    img.src=URL.createObjectURL(file);
+  });
+}
+
+function fillSelect(id, arr, placeholder){
+  const s=$(id); if(!s) return;
+  s.innerHTML = (placeholder?`<option value="">${placeholder}</option>`:"") + arr.map(v=>`<option>${v}</option>`).join("");
+}
+function resetAddVis(){
+  ["f-cond-other","f-cond-quar","f-zone-other","f-shelf-wrap","f-pot-other","f-addname","f-vdup","f-name-sug","f-inherit","f-recipe","f-cult-add","f-photo-note","f-verify-note"].forEach(id=>{ const e=$(id); if(e) e.style.display="none"; });
+  const vs=$("f-vsug"); if(vs){ vs.classList.remove("open"); vs.innerHTML=""; }
+}
+
+async function setupAddForm(){
+  const f=$("add-form"); if(!f) return;
+  f.reset();
+  addPhotoFile=null; verifyOK=false;
+  const pimg=$("f-photo-preview"); if(pimg){ pimg.src=""; pimg.style.display="none"; }
+  const ppr=$("f-photo-prompt"); if(ppr) ppr.style.display="block";
+  const pz=$("f-photo-zone"); if(pz) pz.classList.remove("bad");
+  $("f-date").value = new Date().toISOString().slice(0,10);
+  fillSelect("f-zone", ZONES, "— Select a zone —");
+  fillSelect("f-shelf", SHELVES, "— Select a shelf —");
+  fillSelect("f-pot", POTS, "— Select a pot —");
+  $("f-cond-chips").innerHTML = CONDS.map(c=>`<span class="chip pick" data-c="${c}">${c}</span>`).join("");
+  condSel = new Set();
+  await loadCatalog();
+  const plants = CACHE.length? CACHE : await fetchPlants();
+  $("f-mother").innerHTML = `<option value="">— Select the mother —</option>` +
+    plants.map(p=>`<option value="${p.id}">${p.unique_name||p.common_name||"Unnamed"} (${lineageCode(p)})</option>`).join("");
+  await loadVendors();
+  fillCultivars();
+  $("f-admin").style.display = isAdmin()? "block":"none";
+  resetAddVis();
+  applyAcq("");
+  if(!addWired){ wireAddForm(); addWired=true; }
+}
+
+function applyAcq(t){
+  const cfg = ACQ[t];
+  $("f-mother-wrap").style.display = (cfg&&cfg.mother)?"block":"none";
+  $("f-vendor-wrap").style.display = (cfg&&cfg.vendor)?"block":"none";
+  if(cfg&&cfg.needMother) $("f-status").value="Propagating";
+  if(!cfg||!cfg.mother){ $("f-mother").value=""; $("f-inherit").style.display="none"; }
+}
+
+async function loadVendors(){
+  const {data} = await sb.from("plant").select("source_name,source_phone,source_website,source_address").not("source_name","is",null);
+  const map={};
+  (data||[]).forEach(r=>{ const n=(r.source_name||"").trim(); if(!n||map[n]) return;
+    map[n]={name:n,phone:r.source_phone||"",website:r.source_website||"",address:r.source_address||""}; });
+  [{name:"Laura — home collection"},{name:"Michi — home collection"}].forEach(s=>{ if(!map[s.name]) map[s.name]={name:s.name,phone:"",website:"",address:""}; });
+  VENDORS = Object.values(map).sort((a,b)=>a.name.localeCompare(b.name));
+}
+function renderVsug(q){
+  const vs=$("f-vsug"); const ql=(q||"").toLowerCase().trim();
+  const list = VENDORS.filter(v=> !ql || v.name.toLowerCase().indexOf(ql)>=0).slice(0,8);
+  if(!list.length){ vs.classList.remove("open"); vs.innerHTML=""; return; }
+  vs.innerHTML = list.map(v=>`<div data-n="${escAttr(v.name)}">${v.name}${(v.phone||v.website)?` <span class="vmeta">· ${[v.phone,v.website].filter(Boolean).join(' · ')}</span>`:''}</div>`).join("");
+  vs.classList.add("open");
+}
+function checkVendorDup(){
+  const vd=$("f-vdup"); const name=($("f-srcname").value||"").trim();
+  const v=VENDORS.find(x=>x.name.toLowerCase()===name.toLowerCase());
+  if(!v||!name){ vd.style.display="none"; return; }
+  const ph=($("f-srcphone").value||"").trim(), wb=($("f-srcweb").value||"").trim();
+  const diffs=[];
+  if(v.phone && ph && v.phone!==ph) diffs.push("phone");
+  if(v.website && wb && v.website!==wb) diffs.push("website");
+  if(diffs.length){ vd.style.display="block"; vd.innerHTML=`Heads up — “${v.name}” is on file with a different ${diffs.join(" & ")}. Same vendor?`; }
+  else { vd.style.display="none"; if(!ph&&v.phone) $("f-srcphone").value=v.phone; if(!wb&&v.website) $("f-srcweb").value=v.website; if(!($("f-srcaddr").value||"").trim()&&v.address) $("f-srcaddr").value=v.address; }
+}
+
+function onMother(){
+  const id=$("f-mother").value, note=$("f-inherit");
+  if(!id){ note.style.display="none"; $("f-name-sug").style.display="none"; return; }
+  const m=CACHE.find(x=>x.id===id); if(!m){ note.style.display="none"; return; }
+  if(m.botanical_name){ ensureBotanical(m.botanical_name); $("f-botanical").value=m.botanical_name; onBotanical(); }
+  if(m.common_name) $("f-common").value=m.common_name;
+  if(m.cultivar) ensureCultivar(m.cultivar);
+  if(/varieg|albo|aurea|mint|thai constellation|variegata/i.test([m.cultivar,m.botanical_name,m.unique_name].filter(Boolean).join(' '))) $("f-variegated").checked=true;
+  const sug=suggestNextName(m), ns=$("f-name-sug");
+  if(sug){ ns.style.display="block"; ns.innerHTML=`Suggested: <a id="use-name">${sug}</a> — of the ${m.house||'founding'} line`;
+    const a=$("use-name"); if(a) a.onclick=()=>{ $("f-name").value=sug; }; }
+  else ns.style.display="none";
+  note.style.display="block";
+  note.innerHTML = `Inherits from <b>${m.unique_name||m.botanical_name||'mother'}</b> — species & line${m.cultivar?', cultivar':''} carried over.`;
+}
+function ensureBotanical(name){
+  const b=$("f-botanical");
+  if(![...b.options].some(o=>o.value===name)){ b.add(new Option(name,name), b.options[b.options.length-1]); }
+}
+function suggestNextName(m){
+  const nm=(m.unique_name||"").trim(); if(!nm) return null;
+  const parts=nm.split(/\s+/), last=parts[parts.length-1].toUpperCase(), idx=ROMAN.indexOf(last);
+  if(idx>0){ parts[parts.length-1]=ROMAN[idx+1]||("G"+(idx+1)); return parts.join(" "); }
+  return nm+" II";
+}
+
+async function saveNewName(){
+  const bot=($("an-bot").value||"").trim(), com=($("an-common").value||"").trim(), med=$("an-medium").value, msg=$("an-msg");
+  const warn=(t)=>{ msg.style.display="block"; msg.className="fnote warn"; msg.textContent=t; };
+  if(!bot) return warn("Botanical name is required.");
+  if(SPECIES.some(s=>(s.botanical_name||"").toLowerCase()===bot.toLowerCase())) return warn("That name is already in the catalog.");
+  const {data,error}=await sb.from("species").insert({botanical_name:bot, common_name:com||null, recommended_medium:med||null}).select().single();
+  if(error) return warn(error.message);
+  SPECIES.push(data); SPECIES.sort((a,b)=>(a.botanical_name||"").localeCompare(b.botanical_name||""));
+  renderBotanical(); $("f-botanical").value=bot; onBotanical();
+  $("f-addname").style.display="none"; $("an-bot").value=""; $("an-common").value=""; $("an-medium").value=""; msg.style.display="none";
+  toast(bot+" added to the catalog.");
+}
+
+function wireAddForm(){
+  $("f-acqtype").addEventListener("change", e=>applyAcq(e.target.value));
+  $("f-botanical").addEventListener("change", onBotanical);
+  $("f-medium").addEventListener("change", ()=>showRecipe($("f-medium").value));
+  $("f-mother").addEventListener("change", onMother);
+  $("f-cond-chips").addEventListener("click", e=>{
+    const c=e.target.closest(".chip"); if(!c) return;
+    const v=c.dataset.c; c.classList.toggle("on");
+    if(condSel.has(v)) condSel.delete(v); else condSel.add(v);
+    $("f-cond-other").style.display = condSel.has("Other")?"block":"none";
+    const quar = condSel.has("Pest seen")||condSel.has("Disease seen");
+    $("f-cond-quar").style.display = quar?"block":"none";
+    if(quar) $("f-status").value="Quarantine";
+  });
+  $("f-zone").addEventListener("change", ()=>{
+    const z=$("f-zone").value;
+    $("f-shelf-wrap").style.display = /^Rack/.test(z)?"block":"none";
+    $("f-zone-other").style.display = z==="Other"?"block":"none";
+  });
+  $("f-pot").addEventListener("change", ()=>{ $("f-pot-other").style.display = $("f-pot").value==="Other"?"block":"none"; });
+  const vn=$("f-srcname"), vs=$("f-vsug");
+  vn.addEventListener("input", ()=>renderVsug(vn.value));
+  vn.addEventListener("focus", ()=>renderVsug(vn.value));
+  vn.addEventListener("blur", ()=>{ setTimeout(()=>vs.classList.remove("open"),150); checkVendorDup(); });
+  vs.addEventListener("mousedown", e=>{
+    const d=e.target.closest("div[data-n]"); if(!d) return;
+    const v=VENDORS.find(x=>x.name===d.dataset.n); if(!v) return;
+    vn.value=v.name; $("f-srcphone").value=v.phone||""; $("f-srcweb").value=v.website||""; $("f-srcaddr").value=v.address||"";
+    vs.classList.remove("open"); $("f-vdup").style.display="none";
+  });
+  $("an-save").addEventListener("click", saveNewName);
+  $("an-cancel").addEventListener("click", ()=>{ $("f-addname").style.display="none"; $("f-botanical").value=""; });
+  // photo capture
+  $("f-photo-zone").addEventListener("click", ()=> $("f-photo-input").click());
+  $("f-photo-input").addEventListener("change", async e=>{
+    const file=e.target.files&&e.target.files[0]; if(!file) return;
+    const note=$("f-photo-note"); note.style.display="none";
+    const q=await checkPhotoQuality(file);
+    if(!q.ok){
+      addPhotoFile=null;
+      $("f-photo-preview").style.display="none"; $("f-photo-prompt").style.display="block";
+      $("f-photo-zone").classList.add("bad");
+      note.style.display="block";
+      note.innerHTML="Photo bounced — "+q.issues.join("; ")+". Please retake.";
+      return;
+    }
+    addPhotoFile=file; verifyOK=false;
+    const vnote=$("f-verify-note"); if(vnote) vnote.style.display="none";
+    const img=$("f-photo-preview"), pr=$("f-photo-prompt");
+    img.src=URL.createObjectURL(file); img.style.display="block"; pr.style.display="none";
+    $("f-photo-zone").classList.remove("bad");
+  });
+  // cultivar add-new
+  $("f-cultivar").addEventListener("change", ()=>{
+    if($("f-cultivar").value==="__add__"){ $("f-cult-add").style.display="block"; $("f-cultivar").value=""; $("f-cult-new").focus(); }
+  });
+  $("f-cult-save").addEventListener("click", ()=>{
+    const v=($("f-cult-new").value||"").trim(); if(!v) return;
+    ensureCultivar(v); $("f-cult-add").style.display="none"; $("f-cult-new").value="";
+  });
+  $("f-cult-cancel").addEventListener("click", ()=>{ $("f-cult-add").style.display="none"; $("f-cult-new").value=""; });
+  $("add-form").addEventListener("submit", submitAdd);
+}
+
+function clearBad(){ document.querySelectorAll("#add-form .bad").forEach(x=>x.classList.remove("bad")); }
+function markBad(id){ const el=$(id); if(!el) return; el.classList.add("bad"); const lab=el.closest("label.field"); if(lab) lab.classList.add("bad"); }
+
+async function submitAdd(e){
   e.preventDefault();
-  const m=$("add-msg"); m.style.color=""; m.textContent="Adding…";
-  const rec = {
-    unique_name: val("f-name"), status: val("f-status"),
-    botanical_name: val("f-botanical"), common_name: val("f-common"),
-    mother_id: val("f-mother")||null,
-    date_entered: val("f-date")||null,
-    acquisition_type: val("f-acqtype")||null,
-    condition_at_intake: val("f-condition"),
-    source_name: val("f-srcname"), source_website: val("f-srcweb"),
-    source_phone: val("f-srcphone"), source_address: val("f-srcaddr"),
-    acquisition_cost: num("f-cost"),
-    location_zone: val("f-zone"), pot_type: val("f-pot")||null,
-    medium: val("f-medium"),
-    target_price: num("f-target"), current_value: num("f-value"),
-    notes: val("f-notes"),
+  const m=$("add-msg"); m.style.color=""; m.textContent=""; clearBad();
+  const t=$("f-acqtype").value, cfg=ACQ[t], bad=[];
+  if(!addPhotoFile) bad.push("f-photo-zone");
+  if(!t) bad.push("f-acqtype");
+  const bot=$("f-botanical").value; if(!bot||bot==="__add__") bad.push("f-botanical");
+  if(!$("f-name").value.trim()) bad.push("f-name");
+  if(!$("f-status").value) bad.push("f-status");
+  const condOther=condSel.has("Other");
+  if(condOther && !$("f-cond-other").value.trim()) bad.push("f-cond-other");
+  const zone=$("f-zone").value; if(!zone) bad.push("f-zone");
+  if(zone==="Other" && !$("f-zone-other").value.trim()) bad.push("f-zone-other");
+  if(/^Rack/.test(zone) && !$("f-shelf").value) bad.push("f-shelf");
+  const pot=$("f-pot").value; if(!pot) bad.push("f-pot");
+  if(pot==="Other" && !$("f-pot-other").value.trim()) bad.push("f-pot-other");
+  if(!$("f-medium").value) bad.push("f-medium");
+  if(!$("f-date").value) bad.push("f-date");
+  const motherId=$("f-mother").value, vendorName=$("f-srcname").value.trim();
+  if(cfg){
+    if(cfg.needMother && !motherId) bad.push("f-mother");
+    if(cfg.needVendor && !vendorName) bad.push("f-srcname");
+    if(cfg.oneOf && !motherId && !vendorName){ bad.push("f-mother"); bad.push("f-srcname"); }
+  }
+  if(bad.length || condSel.size===0){
+    bad.forEach(markBad);
+    m.style.color="var(--garnet-bright)";
+    m.textContent = !addPhotoFile ? "A photo is required — tap the photo box, then fill any highlighted fields."
+      : condSel.size===0 ? "Pick at least one condition, and fill the highlighted fields."
+      : "Please fill the highlighted fields.";
+    const first=$(bad[0]); if(first&&first.scrollIntoView) first.scrollIntoView({behavior:"smooth",block:"center"});
+    return;
+  }
+  // Linnaeus photo verification — the stubbed ✓ / ⚠ check, live once the function is deployed.
+  if(!verifyOK && addPhotoFile){
+    const vn=$("f-verify-note");
+    m.style.color=""; m.textContent="Linnaeus is checking the photo…";
+    const v=await linnaeusVerify(bot, $("f-common").value, addPhotoFile);
+    m.textContent="";
+    if(v && v.result){
+      const r=v.result;
+      if(r.match===false && r.confidence!=="low"){
+        vn.style.display="block"; vn.className="fnote warn";
+        vn.innerHTML='⚠ Linnaeus thinks this looks like <b>'+(r.looks_like||'something else')+'</b>, not <b>'+bot+'</b>. '+(r.note||'')+' <a id="vconfirm">Confirm anyway</a> &nbsp;·&nbsp; <a id="vchange">Change name</a>';
+        $("vconfirm").onclick=()=>{ verifyOK=true; vn.style.display="none"; submitAdd(e); };
+        $("vchange").onclick=()=>{ vn.style.display="none"; markBad("f-botanical"); $("f-botanical").scrollIntoView({behavior:"smooth",block:"center"}); };
+        return;
+      }
+      verifyOK=true;
+      if(r.match===true){ vn.style.display="block"; vn.className="fnote"; vn.innerHTML="Linnaeus verified ✓ "+(r.note||""); }
+    } else { verifyOK=true; } // AI unavailable (e.g. local preview) — don't block the save
+  }
+  m.textContent="Adding…";
+  let loc = zone==="Other" ? $("f-zone-other").value.trim() : zone;
+  if(/^Rack/.test(zone)) loc = zone+" · "+$("f-shelf").value;
+  const potv = pot==="Other" ? $("f-pot-other").value.trim() : pot;
+  const conds=[...condSel].filter(c=>c!=="Other");
+  if(condOther) conds.push($("f-cond-other").value.trim());
+  let cultivar=$("f-cultivar").value.trim();
+  if($("f-variegated").checked && !/varieg/i.test(cultivar)) cultivar = cultivar? cultivar+" (variegated)" : "Variegated";
+  const rec={
+    unique_name:$("f-name").value.trim(), status:$("f-status").value,
+    botanical_name:bot, common_name:val("f-common"), cultivar:cultivar||null,
+    mother_id:(cfg&&cfg.mother&&motherId)?motherId:null,
+    date_entered:$("f-date").value||null, acquisition_type:t,
+    condition_at_intake:conds.join(", ")||null,
+    location_zone:loc, pot_type:potv, medium:val("f-medium"), notes:val("f-notes"),
   };
-  const {data,error} = await sb.from("plant").insert(rec).select().single();
+  if(cfg&&cfg.vendor&&vendorName){
+    rec.source_name=vendorName; rec.source_phone=val("f-srcphone"); rec.source_website=val("f-srcweb"); rec.source_address=val("f-srcaddr");
+  }
+  if(isAdmin()){ rec.acquisition_cost=num("f-cost"); rec.target_price=num("f-target"); rec.current_value=num("f-value"); }
+  const {data,error}=await sb.from("plant").insert(rec).select().single();
   if(error){ m.style.color="var(--garnet-bright)"; m.textContent=error.message; return; }
-  await fetchPlants();
-  e.target.reset();
+  // upload the required photo, set as cover
+  if(addPhotoFile){
+    try{
+      const file=addPhotoFile;
+      const ext=(file.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"")||"jpg";
+      const path=data.id+"/"+Date.now()+"."+ext;
+      const up=await sb.storage.from("plant-photos").upload(path, file, {upsert:false, contentType:file.type||"image/jpeg"});
+      if(up.error){ toast("Plant saved — photo upload failed: "+up.error.message); }
+      else{
+        const url=sb.storage.from("plant-photos").getPublicUrl(path).data.publicUrl;
+        await sb.from("photo").insert({plant_id:data.id, image_url:url});
+        await sb.from("plant").update({cover_photo_url:url}).eq("id",data.id);
+      }
+    }catch(err){ toast("Plant saved — photo failed: "+err.message); }
+  }
+  await fetchPlants(); await loadVendors();
+  $("add-form").reset(); condSel=new Set(); addPhotoFile=null; verifyOK=false;
+  $("f-photo-preview").style.display="none"; $("f-photo-prompt").style.display="block";
+  resetAddVis(); applyAcq("");
   toast((rec.unique_name||"Plant")+" entered the collection.");
   openPlant(data.id);
-};
+}
 function val(id){ const v=$(id).value; return v&&v.trim()? v.trim():null; }
 function num(id){ const v=$(id).value; return v? Number(v):null; }
 
@@ -298,6 +609,14 @@ function renderPlant(p, mother, kids, care, photos, health){
       </div>
     </div>
     <div class="section-t">
+      <div class="label flank" style="justify-content:flex-start;">ASK LINNAEUS</div>
+      <div style="margin-top:10px;display:flex;gap:8px;">
+        <input id="ai-q" placeholder="What does this plant need right now?" style="flex:1;" />
+        <button type="button" class="btn btn-sm btn-gold" onclick="askPlant()">✦ Ask</button>
+      </div>
+      <div id="ai-ans" class="roomnote" style="display:none;margin-top:10px;white-space:pre-wrap;"></div>
+    </div>
+    <div class="section-t">
       <div class="label flank" style="justify-content:flex-start;">CARE &amp; HEALTH</div>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">
         ${["Watered","Fed","Repotted","Pruned","Treated","Rotated","Moved"].map(a=>`<button type="button" class="btn btn-sm" onclick="logCare('${a}')">${a}</button>`).join("")}
@@ -305,6 +624,7 @@ function renderPlant(p, mother, kids, care, photos, health){
       <div id="care-list" style="margin-top:14px;">${renderCareItems(care)}</div>
       <div style="margin-top:18px;"><button type="button" class="btn btn-sm" onclick="toggleConcern()">+ Log a concern</button></div>
       <div id="concern-form" style="display:none;margin-top:12px;background:#15140f;border:1px solid var(--line);border-radius:3px;padding:14px;">
+        <div style="margin-bottom:10px;"><button type="button" class="btn btn-sm btn-gold" onclick="diagnoseConcern()">✦ Diagnose from photo</button></div>
         <label class="field">Symptom<textarea id="h-symptom" rows="2" placeholder="e.g. yellowing lower leaves, webbing on new growth"></textarea></label>
         <div class="row2">
           <label class="field">Suspected cause<input id="h-cause" placeholder="e.g. overwatering, spider mites" /></label>
@@ -317,6 +637,59 @@ function renderPlant(p, mother, kids, care, photos, health){
     </div>`;
 }
 function kv(k,v){ return v? `<div class="k">${k}</div><div>${v}</div>` : ""; }
+
+
+/* ---------- Linnaeus AI (in-app, via Netlify function) ---------- */
+async function aiToken(){ try{ const {data}=await sb.auth.getSession(); return data&&data.session? data.session.access_token : null; }catch(e){ return null; } }
+function fileToB64(file){ return new Promise(res=>{ const r=new FileReader();
+  r.onload=()=>{ const s=String(r.result||""); const m=/^data:(image\/[a-z0-9.+-]+);base64,(.*)$/i.exec(s);
+    res(m?{media:m[1],b64:m[2]}:{media:file.type||"image/jpeg",b64:s.split(",").pop()}); };
+  r.onerror=()=>res(null); r.readAsDataURL(file); }); }
+async function askLinnaeus(payload){
+  const tok=await aiToken();
+  if(!tok) return {error:"Sign in to use Linnaeus."};
+  try{
+    const r=await fetch("/.netlify/functions/linnaeus",{method:"POST",
+      headers:{"content-type":"application/json","authorization":"Bearer "+tok},
+      body:JSON.stringify(payload)});
+    const j=await r.json().catch(()=>null);
+    if(!r.ok) return {error:(j&&j.error)||("Linnaeus error ("+r.status+")")};
+    return j;
+  }catch(e){ return {error:"Couldn't reach Linnaeus (is the app deployed?)."}; }
+}
+function plantCtx(p){ p=p||{}; return {unique_name:p.unique_name,botanical_name:p.botanical_name,common_name:p.common_name,cultivar:p.cultivar,location_zone:p.location_zone,status:p.status,condition_at_intake:p.condition_at_intake,date_entered:p.date_entered}; }
+async function linnaeusVerify(botanical, common, file){
+  if(!file) return null;
+  const img=await fileToB64(file); if(!img) return null;
+  return await askLinnaeus({mode:"verify", botanical_name:botanical, common_name:common, image_b64:img.b64, media_type:img.media});
+}
+window.askPlant=async function(){
+  const q=($("ai-q").value||"").trim()||"What does this plant need right now?";
+  const ans=$("ai-ans"); ans.style.display="block"; ans.textContent="Linnaeus is thinking…";
+  const v=await askLinnaeus({mode:"advise", plant:plantCtx(window.CURRENT_PLANT), question:q});
+  ans.textContent=(v&&v.text)?v.text:(v&&v.error?("Linnaeus: "+v.error):"No answer.");
+};
+window.diagnoseConcern=function(){
+  const inp=document.createElement("input"); inp.type="file"; inp.accept="image/*"; inp.setAttribute("capture","environment");
+  inp.onchange=async e=>{ const f=e.target.files&&e.target.files[0]; if(!f) return;
+    const q=await checkPhotoQuality(f); if(!q.ok){ toast("Photo bounced — "+q.issues.join("; ")); return; }
+    toast("Linnaeus is looking…");
+    const img=await fileToB64(f); if(!img){ toast("Couldn't read photo."); return; }
+    const v=await askLinnaeus({mode:"diagnose", plant:plantCtx(window.CURRENT_PLANT), symptom:val("h-symptom"), image_b64:img.b64, media_type:img.media});
+    if(!v||v.error||!v.result){ toast(v&&v.error?("Linnaeus: "+v.error):"Couldn't reach Linnaeus."); return; }
+    const r=v.result;
+    if(!val("h-symptom") && r.symptom) $("h-symptom").value=r.symptom;
+    if(r.likely_cause) $("h-cause").value=r.likely_cause;
+    if(r.treatment) $("h-treat").value=r.treatment;
+    toast("Linnaeus: "+(r.severity||"reviewed")+" — review & save.");
+  };
+  inp.click();
+};
+window.todayBrief=async function(){
+  const ans=$("ai-today"); ans.style.display="block"; ans.textContent="Linnaeus is reviewing…";
+  const v=await askLinnaeus({mode:"today", summary: window.__todaySummary||"No data."});
+  ans.textContent=(v&&v.text)?v.text:(v&&v.error?("Linnaeus: "+v.error):"No answer.");
+};
 
 
 /* ---------- PWA service worker (registers on https) ---------- */
@@ -368,31 +741,37 @@ const SOILS = {
   "Semi-Hydro — Lechuza Pon":"Pumice/zeolite/lava blend, lightly pre-charged. Reservoir feeding; great for high-value specimens & imports."
 };
 let SPECIES = [];
-async function setupSmartForm(){
-  const bsel=$("f-botanical"), msel=$("f-medium"), cn=$("f-common"), rec=$("f-recipe");
-  if(!bsel || !msel) return;
-  if(msel.options.length<=1){
-    Object.keys(SOILS).forEach(k=>{ const o=document.createElement("option"); o.value=k; o.textContent=k; msel.appendChild(o); });
-  }
+async function loadCatalog(){
+  const msel=$("f-medium"), anm=$("an-medium");
+  if(msel && msel.options.length<=1){ Object.keys(SOILS).forEach(k=> msel.appendChild(new Option(k,k))); }
+  if(anm && anm.options.length<=1){ Object.keys(SOILS).forEach(k=> anm.appendChild(new Option(k,k))); }
   if(!SPECIES.length){
-    const {data} = await sb.from("species").select("botanical_name,common_name,recommended_medium").order("botanical_name");
+    const {data} = await sb.from("species").select("id,botanical_name,common_name,recommended_medium,cultivar").order("botanical_name");
     SPECIES = data||[];
   }
-  bsel.innerHTML = `<option value="">— Select a botanical name —</option>` +
-    SPECIES.map(s=>`<option value="${s.botanical_name}">${s.botanical_name}</option>`).join("");
-  function showRecipe(k){
-    if(k && SOILS[k]){
-      rec.style.display="block";
-      rec.innerHTML='<span style="color:var(--gold);font-size:10px;letter-spacing:.14em;text-transform:uppercase;display:block;margin-bottom:5px;">'+k+'</span>'+SOILS[k];
-    } else { rec.style.display="none"; }
-  }
-  bsel.onchange=()=>{
-    const s=SPECIES.find(x=>x.botanical_name===bsel.value);
-    if(!s){ cn.value=""; return; }
-    cn.value=s.common_name||"";
-    if(s.recommended_medium){ msel.value=s.recommended_medium; showRecipe(s.recommended_medium); }
-  };
-  msel.onchange=()=>showRecipe(msel.value);
+  renderBotanical();
+  fillCultivars();
+}
+function renderBotanical(){
+  const b=$("f-botanical"); if(!b) return;
+  b.innerHTML = `<option value="">— Select a botanical name —</option>` +
+    SPECIES.map(s=>`<option value="${escAttr(s.botanical_name)}">${s.botanical_name}</option>`).join("") +
+    `<option value="__add__">＋ Can't find it? Add a name…</option>`;
+}
+function showRecipe(k){
+  const rec=$("f-recipe"); if(!rec) return;
+  if(k && SOILS[k]){ rec.style.display="block";
+    rec.innerHTML='<span style="color:var(--gold);font-size:10px;letter-spacing:.14em;text-transform:uppercase;display:block;margin-bottom:5px;">'+k+'</span>'+SOILS[k];
+  } else rec.style.display="none";
+}
+function onBotanical(){
+  const b=$("f-botanical");
+  if(b.value==="__add__"){ $("f-addname").style.display="block"; $("f-common").value=""; return; }
+  $("f-addname").style.display="none";
+  const s=SPECIES.find(x=>x.botanical_name===b.value);
+  if(!s){ $("f-common").value=""; return; }
+  $("f-common").value=s.common_name||"";
+  if(s.recommended_medium){ $("f-medium").value=s.recommended_medium; showRecipe(s.recommended_medium); }
 }
 
 
@@ -440,6 +819,8 @@ window.addPhoto = function(){
 async function handlePhoto(e){
   var file = e.target.files && e.target.files[0];
   if(!file) return;
+  var q = await checkPhotoQuality(file);
+  if(!q.ok){ toast("Photo bounced — "+q.issues.join("; ")+". Retake."); return; }
   toast("Uploading photo…");
   var ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g,"") || "jpg";
   var path = currentPlantId + "/" + Date.now() + "." + ext;

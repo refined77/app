@@ -121,6 +121,20 @@
   .tended .tg{color:var(--gold);}
   .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
   .chip{border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--cream);}
+  .chip.pick{cursor:pointer;transition:.15s;user-select:none;}
+  .chip.pick:hover{border-color:var(--gold);}
+  .chip.on{background:var(--garnet);border-color:var(--garnet);color:var(--cream);}
+  .fnote{font-size:12px;line-height:1.5;color:var(--muted);margin:6px 0 4px;}
+  .fnote.warn{color:var(--garnet-bright);}
+  .fnote a{color:var(--gold);cursor:pointer;border-bottom:1px solid var(--line);}
+  .ck{display:flex;align-items:center;gap:9px;font-size:12px;letter-spacing:.04em;color:var(--cream);margin:-2px 0 14px;cursor:pointer;}
+  .ck input{width:auto;margin:0;}
+  .vsug{position:absolute;left:0;right:0;top:100%;z-index:30;background:#15140f;border:1px solid var(--line);border-top:none;border-radius:0 0 4px 4px;max-height:200px;overflow:auto;display:none;}
+  .vsug.open{display:block;}
+  .vsug div{padding:8px 11px;font-size:12px;letter-spacing:.04em;color:var(--cream);cursor:pointer;text-transform:none;}
+  .vsug div:hover{background:var(--oxblood);}
+  .vsug div .vmeta{color:var(--muted);font-size:10px;}
+  label.field.bad input,label.field.bad select,input.bad,select.bad,#f-photo-zone.bad{border-color:var(--garnet-bright);}
   .kv{display:grid;grid-template-columns:150px 1fr;gap:6px 16px;margin-top:18px;font-size:14px;}
   .kv .k{color:var(--gold);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding-top:2px;}
   .section-t{margin-top:30px;}
@@ -185,85 +199,160 @@
   <!-- ADD -->
   <div id="v-add" class="view hidden">
     <div class="view-head"><h2>Add a Plant</h2><div class="sub">A new specimen enters the collection.</div></div>
-    <form id="add-form">
+    <form id="add-form" autocomplete="off">
+      <!-- PHOTO — required, photo-first -->
+      <div class="label" style="margin-bottom:8px;">Photo — required</div>
+      <div id="f-photo-zone" style="border:1px dashed var(--line);border-radius:4px;min-height:150px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:#0d0d0d;overflow:hidden;margin-bottom:16px;text-align:center;">
+        <div id="f-photo-prompt" style="color:var(--muted);font-size:13px;letter-spacing:.04em;padding:34px;line-height:1.7;">＋ Tap to add a photo<br><span style="font-size:11px;">Clear and well-lit — Laura zooms in</span></div>
+        <img id="f-photo-preview" alt="" style="display:none;width:100%;max-height:340px;object-fit:cover;" />
+      </div>
+      <input type="file" id="f-photo-input" accept="image/*" capture="environment" style="display:none;" />
+      <div class="label" style="margin:-8px 0 6px;">Photo standard — Linnaeus checks each shot</div>
+      <ul style="margin:0 0 8px;padding-left:18px;color:var(--muted);font-size:12px;line-height:1.7;">
+        <li>Same photo station, same light, plain backdrop — every time.</li>
+        <li>Fill the frame: whole plant, soil line to top leaf.</li>
+        <li>Sharp focus, bright, no harsh shadows. Hold steady.</li>
+        <li>Dust the leaves; best side to the camera.</li>
+      </ul>
+      <div id="f-photo-note" class="fnote warn" style="display:none;margin-bottom:16px;"></div>
+
+      <!-- 1 · HOW IT CAME TO US — drives the rest of the form -->
+      <label class="field">How it came to us
+        <select id="f-acqtype" required>
+          <option value="">— Choose one —</option>
+          <option>Purchased</option>
+          <option>Trade / Gift</option>
+          <option>Tissue culture</option>
+          <option>Cutting</option>
+          <option>Division</option>
+          <option>Our own propagation</option>
+        </select>
+      </label>
+
+      <!-- MOTHER (ours / cutting) -->
+      <div id="f-mother-wrap" style="display:none;">
+        <label class="field">Propagated from (mother)
+          <select id="f-mother"><option value="">— Select the mother —</option></select>
+        </label>
+        <div id="f-inherit" class="fnote" style="display:none;"></div>
+      </div>
+
+      <!-- VENDOR (outside / cutting) -->
+      <div id="f-vendor-wrap" style="display:none;">
+        <div class="label" style="margin:2px 0 10px;">Where we got it</div>
+        <label class="field" style="position:relative;">Vendor / source
+          <input id="f-srcname" placeholder="Start typing — pick if it exists" autocomplete="off" />
+          <div id="f-vsug" class="vsug"></div>
+        </label>
+        <div id="f-vdup" class="fnote warn" style="display:none;"></div>
+        <div class="row2">
+          <label class="field">Phone<input id="f-srcphone" /></label>
+          <label class="field">Website<input id="f-srcweb" placeholder="https://" /></label>
+        </div>
+        <label class="field">Address<input id="f-srcaddr" /></label>
+      </div>
+
+      <hr class="rule" />
+
+      <!-- 2 · WHAT IT IS -->
+      <label class="field">Botanical name
+        <select id="f-botanical" required><option value="">— Select a botanical name —</option></select>
+      </label>
+      <div id="f-addname" style="display:none;background:#15140f;border:1px solid var(--line);border-left:3px solid var(--garnet);border-radius:3px;padding:12px 13px;margin:-4px 0 16px;">
+        <div class="label" style="margin-bottom:10px;">Add a new name to the catalog</div>
+        <div class="row2">
+          <label class="field">Botanical name<input id="an-bot" placeholder="e.g. Philodendron spiritus-sancti" /></label>
+          <label class="field">Common name<input id="an-common" placeholder="e.g. Spirit of the Saint" /></label>
+        </div>
+        <label class="field">Default mix
+          <select id="an-medium"><option value="">— Pick a mix —</option></select>
+        </label>
+        <div id="an-msg" class="fnote" style="display:none;"></div>
+        <div style="display:flex;gap:10px;">
+          <button type="button" class="btn btn-sm btn-gold" id="an-save">Save name</button>
+          <button type="button" class="btn btn-sm" id="an-cancel">Cancel</button>
+        </div>
+        <div class="fnote" style="margin-top:10px;">Linnaeus photo-verify (✓ / ⚠ mismatch → 3rd confirm) switches on once the AI is wired — for now this just adds the name.</div>
+      </div>
+      <div class="row2">
+        <label class="field">Common name<input id="f-common" readonly placeholder="fills automatically" /></label>
+        <label class="field">Cultivar / variety
+          <select id="f-cultivar"><option value="">— None —</option></select>
+        </label>
+      </div>
+      <div id="f-cult-add" style="display:none;margin:-6px 0 14px;">
+        <div style="display:flex;gap:8px;">
+          <input id="f-cult-new" placeholder="New cultivar — e.g. Albo Variegata" style="flex:1;" />
+          <button type="button" class="btn btn-sm btn-gold" id="f-cult-save">Add</button>
+          <button type="button" class="btn btn-sm" id="f-cult-cancel">Cancel</button>
+        </div>
+      </div>
+      <label class="ck"><input type="checkbox" id="f-variegated" /> <span>Variegated — needs a brighter shelf</span></label>
+
       <div class="row2">
         <label class="field">Our name for it
-          <input id="f-name" placeholder="e.g. Lady in Garnet" />
+          <input id="f-name" placeholder="e.g. Lady in Garnet" required />
+          <span id="f-name-sug" class="fnote" style="display:none;"></span>
         </label>
         <label class="field">Status
-          <select id="f-status">
+          <select id="f-status" required>
             <option>In Collection</option><option>Quarantine</option><option>Mother Plant</option>
             <option>Propagating</option><option>Ready to Sell</option><option>Listed</option>
             <option>Reserved</option><option>Sold</option><option>Gifted</option><option>Lost</option>
           </select>
         </label>
       </div>
-      <label class="field">Botanical name
-        <select id="f-botanical"><option value="">Select a botanical name</option></select>
-      </label>
-      <div class="row2">
-        <label class="field">Common name
-          <input id="f-common" readonly placeholder="fills automatically" />
-        </label>
-        <label class="field">Soil / medium
-          <select id="f-medium"><option value="">Select a mix</option></select>
-        </label>
-      </div>
-      <div id="f-recipe" style="display:none;font-size:12px;line-height:1.5;color:#F1E5C9;background:#15140f;border-left:3px solid #91241C;border-radius:2px;padding:10px 12px;margin:-4px 0 14px;"></div>
-      <div class="row2">
-        <label class="field">Propagated from (mother)
-          <select id="f-mother"><option value="">— None (this is a founder) —</option></select>
-        </label>
-        <label class="field">Date entered
-          <input type="date" id="f-date" />
-        </label>
-      </div>
-      <div class="row2">
-        <label class="field">Acquisition type
-          <select id="f-acqtype"><option value="">—</option><option>finished</option><option>cutting</option><option>TC</option><option>division</option></select>
-        </label>
-        <label class="field">Condition at intake
-          <input id="f-condition" placeholder="e.g. healthy, 4 leaves" />
-        </label>
-      </div>
+
+      <!-- 3 · CONDITION (multi) -->
+      <div class="label" style="margin:4px 0 8px;">Condition at intake — tap all that apply</div>
+      <div id="f-cond-chips" class="chips"></div>
+      <input id="f-cond-other" placeholder="Other — describe" style="display:none;margin-top:10px;" />
+      <div id="f-cond-quar" class="fnote warn" style="display:none;margin-top:8px;">Pest or disease noted — status set to Quarantine. Clear only after 3–4 clean weeks.</div>
+
       <hr class="rule" />
-      <div class="label" style="margin-bottom:10px;">Where we got it</div>
-      <div class="row2">
-        <label class="field">Source name
-          <input id="f-srcname" placeholder="Vendor / seller" />
-        </label>
-        <label class="field">Source price
-          <input id="f-cost" type="number" step="0.01" placeholder="0.00" />
-        </label>
-      </div>
-      <div class="row2">
-        <label class="field">Source website
-          <input id="f-srcweb" placeholder="https://" />
-        </label>
-        <label class="field">Source phone
-          <input id="f-srcphone" placeholder="" />
-        </label>
-      </div>
-      <label class="field">Source address
-        <input id="f-srcaddr" placeholder="" />
-      </label>
-      <hr class="rule" />
+
+      <!-- 4 · WHERE IT LIVES -->
       <div class="row2">
         <label class="field">Location / zone
-          <input id="f-zone" placeholder="Rack 1 / Hoya bench / Quarantine" />
+          <select id="f-zone" required></select>
         </label>
-        <label class="field">Pot type
-          <select id="f-pot"><option value="">—</option><option>glass</option><option>terracotta</option><option>matte black</option></select>
+        <label class="field" id="f-shelf-wrap" style="display:none;">Shelf
+          <select id="f-shelf"></select>
         </label>
       </div>
+      <input id="f-zone-other" placeholder="Other zone — required" style="display:none;" />
       <div class="row2">
-        <label class="field">Target price<input id="f-target" type="number" step="0.01" placeholder="0.00" /></label>
+        <label class="field">Pot type
+          <select id="f-pot" required></select>
+        </label>
+        <label class="field">Soil / medium
+          <select id="f-medium" required><option value="">— Select a mix —</option></select>
+        </label>
+      </div>
+      <input id="f-pot-other" placeholder="Other pot type — required" style="display:none;" />
+      <div id="f-recipe" style="display:none;font-size:12px;line-height:1.5;color:#F1E5C9;background:#15140f;border-left:3px solid #91241C;border-radius:2px;padding:10px 12px;margin:6px 0 14px;"></div>
+
+      <label class="field">Date entered
+        <input type="date" id="f-date" required />
+      </label>
+
+      <!-- 5 · ADMIN ONLY · pricing -->
+      <div id="f-admin" style="display:none;">
+        <hr class="rule" />
+        <div class="label" style="margin-bottom:10px;">🔒 Admin only · pricing</div>
+        <div class="row2">
+          <label class="field">Source price<input id="f-cost" type="number" step="0.01" placeholder="0.00" /></label>
+          <label class="field">Target price<input id="f-target" type="number" step="0.01" placeholder="0.00" /></label>
+        </div>
         <label class="field">Current value<input id="f-value" type="number" step="0.01" placeholder="0.00" /></label>
-      </div>      <label class="field">Notes
+      </div>
+
+      <label class="field">Notes
         <textarea id="f-notes" rows="2" placeholder="Anything to remember about this specimen."></textarea>
       </label>
+      <div id="f-verify-note" class="fnote" style="display:none;margin-bottom:10px;"></div>
       <div style="display:flex;gap:12px;margin-top:8px;">
-        <button type="submit" class="btn btn-primary">Add to Collection</button>
+        <button type="submit" class="btn btn-primary">Add to collection</button>
         <button type="button" class="btn" id="add-cancel">Cancel</button>
       </div>
       <div class="auth-msg muted" id="add-msg"></div>
