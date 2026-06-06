@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#111111" />
+<title>Botanical Reverie</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --noir:#111111; --black:#000; --panel:#1a1a1a; --panel-2:#15140f;
+    --cream:#F1E5C9; --gold:#B8975A; --gold-old:#9A7B43; --champagne:#D9C290;
+    --garnet:#91241C; --garnet-bright:#B23A2E; --oxblood:#5E1712;
+    --fern:#4C5B39; --sage:#676F55; --eucalyptus:#97A07F;
+    --muted:rgba(241,229,201,.58); --line:rgba(184,151,90,.35);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--noir);color:var(--cream);
+    font-family:'Jost',system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+  body{min-height:100vh;}
+  h1,h2,h3{font-family:'Cormorant Garamond',Georgia,serif;font-weight:400;margin:0;}
+  a{color:var(--gold);text-decoration:none;}
+  button{font-family:'Jost',sans-serif;cursor:pointer;}
+  .hidden{display:none !important;}
+  .muted{color:var(--muted);}
+  .gold{color:var(--gold);}
+  .italic{font-style:italic;}
+  .label{font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);}
+  .flank{display:flex;align-items:center;gap:12px;justify-content:center;}
+  .flank::before,.flank::after{content:"";height:1px;width:46px;background:var(--gold);opacity:.6;}
+  .center{text-align:center;}
+
+  /* Buttons */
+  .btn{display:inline-block;border:1px solid var(--gold);background:transparent;color:var(--cream);
+    padding:12px 22px;letter-spacing:.16em;text-transform:uppercase;font-size:12px;border-radius:2px;
+    transition:.18s;}
+  .btn:hover{background:rgba(184,151,90,.12);}
+  .btn-primary{background:var(--garnet);border-color:var(--garnet);color:var(--cream);}
+  .btn-primary:hover{background:var(--garnet-bright);}
+  .btn-gold{background:var(--gold);border-color:var(--gold);color:#1a1407;}
+  .btn-gold:hover{background:var(--champagne);}
+  .btn-sm{padding:8px 14px;font-size:11px;}
+
+  /* Inputs */
+  input,select,textarea{width:100%;background:#0d0d0d;border:1px solid var(--line);color:var(--cream);
+    font-family:'Jost',sans-serif;font-size:15px;padding:11px 12px;border-radius:2px;margin-top:6px;}
+  input:focus,select,textarea:focus{outline:none;border-color:var(--gold);}
+  label.field{display:block;margin-bottom:14px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  @media(max-width:560px){.row2{grid-template-columns:1fr;}}
+
+  /* AUTH */
+  #auth-view{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+  .auth-card{width:100%;max-width:380px;text-align:center;}
+  .auth-card .mark{font-family:'Cormorant Garamond',serif;font-size:54px;color:var(--gold);line-height:1;}
+  .auth-logo{width:240px;max-width:80%;display:block;margin:0 auto 8px;}
+  .topbar .brand-logo{height:26px;width:auto;display:block;}
+  .auth-card h1{font-size:30px;letter-spacing:.04em;margin:6px 0 2px;}
+  .auth-card .tag{font-style:italic;color:var(--cream);font-size:17px;margin-bottom:4px;}
+  .auth-card form{margin-top:26px;text-align:left;}
+  .auth-msg{margin-top:14px;font-size:13px;min-height:18px;}
+  .auth-toggle{margin-top:18px;font-size:13px;color:var(--muted);}
+  .endorse{margin-top:34px;font-size:9px;letter-spacing:.28em;color:var(--sage);text-transform:uppercase;}
+
+  /* APP CHROME */
+  #app-view{max-width:1000px;margin:0 auto;padding:0 18px 110px;}
+  .topbar{position:sticky;top:0;z-index:20;background:rgba(17,17,17,.92);backdrop-filter:blur(8px);
+    display:flex;align-items:center;justify-content:space-between;padding:16px 2px 14px;border-bottom:1px solid var(--line);}
+  .topbar .brand{font-family:'Cormorant Garamond',serif;font-size:22px;color:var(--cream);letter-spacing:.04em;}
+  .topbar .brand b{color:var(--gold);font-weight:400;}
+  .topbar .who{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);}
+  .topbar .who a{margin-left:12px;}
+
+  /* bottom nav */
+  .nav{position:fixed;bottom:0;left:0;right:0;z-index:30;background:rgba(13,13,13,.96);backdrop-filter:blur(10px);
+    border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:8px 0 calc(8px + env(safe-area-inset-bottom));}
+  .nav button{background:none;border:none;color:var(--muted);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
+    display:flex;flex-direction:column;align-items:center;gap:4px;padding:6px 10px;}
+  .nav button .ic{font-size:17px;line-height:1;}
+  .nav button.active{color:var(--gold);}
+
+  .view-head{padding:26px 0 16px;}
+  .view-head h2{font-size:30px;letter-spacing:.03em;}
+  .view-head .sub{color:var(--muted);font-size:14px;margin-top:4px;}
+
+  /* Collection grid */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:3px;overflow:hidden;transition:.18s;cursor:pointer;}
+  .card:hover{border-color:var(--gold);}
+  .card .thumb{height:150px;background:#0d0d0d center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:var(--sage);font-size:34px;font-family:'Cormorant Garamond',serif;}
+  .card .body{padding:12px 14px 14px;}
+  .card .nm{font-family:'Cormorant Garamond',serif;font-size:19px;font-style:italic;color:var(--cream);}
+  .card .code{font-size:10px;letter-spacing:.14em;color:var(--gold);margin-top:3px;}
+  .card .meta{margin-top:9px;display:flex;align-items:center;gap:7px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--garnet);display:inline-block;}
+
+  .empty{border:1px dashed var(--line);border-radius:3px;padding:46px 20px;text-align:center;color:var(--muted);}
+  .empty .big{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:24px;color:var(--cream);margin-bottom:8px;}
+
+  hr.rule{border:none;border-top:1px solid var(--line);margin:22px 0;}
+
+  /* Plant page */
+  .pp-hero{display:grid;grid-template-columns:300px 1fr;gap:24px;margin-top:8px;}
+  @media(max-width:640px){.pp-hero{grid-template-columns:1fr;}}
+  .pp-cover{height:320px;background:#0d0d0d center/cover no-repeat;border:1px solid var(--line);border-radius:3px;display:flex;align-items:center;justify-content:center;color:var(--sage);font-size:60px;font-family:'Cormorant Garamond',serif;}
+  .pp-name{font-size:38px;font-style:italic;}
+  .pp-code{font-size:12px;letter-spacing:.18em;color:var(--gold);margin-top:6px;}
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
+  .chip{border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--cream);}
+  .kv{display:grid;grid-template-columns:150px 1fr;gap:6px 16px;margin-top:18px;font-size:14px;}
+  .kv .k{color:var(--gold);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding-top:2px;}
+  .section-t{margin-top:30px;}
+  .pp-story{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:15px;color:var(--eucalyptus);margin-top:10px;line-height:1.5;max-width:52ch;}
+  .roomnote{background:#15140f;border-left:3px solid var(--gold);border-radius:2px;padding:11px 13px;font-size:13px;line-height:1.55;color:var(--cream);}
+
+  .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--gold);
+    color:var(--cream);padding:12px 20px;border-radius:3px;font-size:13px;z-index:50;opacity:0;transition:.25s;pointer-events:none;}
+  .toast.show{opacity:1;}
+  .spin{display:inline-block;width:16px;height:16px;border:2px solid var(--line);border-top-color:var(--gold);border-radius:50%;animation:s .7s linear infinite;}
+  @keyframes s{to{transform:rotate(360deg);}}
+</style>
+</head>
+<body>
+
+<!-- ============ AUTH ============ -->
+<section id="auth-view">
+  <div class="auth-card">
+    <img class="auth-logo" src="assets/wordmark-cream.png" alt="Botanical Reverie" />
+    <div class="tag">Rare. Rooted. <span class="gold">Refined.</span></div>
+    <form id="auth-form" autocomplete="on">
+      <label class="field">Email
+        <input type="email" id="au-email" required placeholder="you@botanicalreverie.com" />
+      </label>
+      <label class="field">Password
+        <input type="password" id="au-pass" required minlength="6" placeholder="••••••••" />
+      </label>
+      <button class="btn btn-gold" id="au-submit" type="submit" style="width:100%;">Sign in</button>
+      <div class="auth-msg muted" id="au-msg"></div>
+    </form>
+    <div class="auth-toggle">
+      <span id="au-switch-txt">New here?</span>
+      <a id="au-switch" href="#">Create your account</a>
+    </div>
+    <div class="endorse">Botanical Reverie — A Refined Company</div>
+  </div>
+</section>
+
+<!-- ============ APP ============ -->
+<section id="app-view" class="hidden">
+  <div class="topbar">
+    <img class="brand-logo" src="assets/wordmark-cream.png" alt="Botanical Reverie" />
+    <div class="who"><span id="who-name">—</span><a id="sign-out" href="#">Sign out</a></div>
+  </div>
+
+  <!-- TODAY -->
+  <div id="v-today" class="view">
+    <div class="view-head"><h2>Today</h2><div class="sub" id="today-date"></div></div>
+    <div id="today-body"></div>
+  </div>
+
+  <!-- COLLECTION -->
+  <div id="v-collection" class="view hidden">
+    <div class="view-head" style="display:flex;justify-content:space-between;align-items:flex-end;">
+      <div><h2>The Collection</h2><div class="sub" id="coll-count">—</div></div>
+      <button class="btn btn-sm" id="go-add">+ Add a Plant</button>
+    </div>
+    <input type="text" id="coll-search" placeholder="Search by name, species, code…" style="margin-bottom:18px;" />
+    <div id="coll-grid" class="grid"></div>
+  </div>
+
+  <!-- ADD -->
+  <div id="v-add" class="view hidden">
+    <div class="view-head"><h2>Add a Plant</h2><div class="sub">A new specimen enters the collection.</div></div>
+    <form id="add-form">
+      <div class="row2">
+        <label class="field">Our name for it
+          <input id="f-name" placeholder="e.g. Lady in Garnet" />
+        </label>
+        <label class="field">Status
+          <select id="f-status">
+            <option>In Collection</option><option>Quarantine</option><option>Mother Plant</option>
+            <option>Propagating</option><option>Ready to Sell</option><option>Listed</option>
+            <option>Reserved</option><option>Sold</option><option>Gifted</option><option>Lost</option>
+          </select>
+        </label>
+      </div>
+      <label class="field">Botanical name
+        <select id="f-botanical"><option value="">Select a botanical name</option></select>
+      </label>
+      <div class="row2">
+        <label class="field">Common name
+          <input id="f-common" readonly placeholder="fills automatically" />
+        </label>
+        <label class="field">Soil / medium
+          <select id="f-medium"><option value="">Select a mix</option></select>
+        </label>
+      </div>
+      <div id="f-recipe" style="display:none;font-size:12px;line-height:1.5;color:#F1E5C9;background:#15140f;border-left:3px solid #91241C;border-radius:2px;padding:10px 12px;margin:-4px 0 14px;"></div>
+      <div class="row2">
+        <label class="field">Propagated from (mother)
+          <select id="f-mother"><option value="">— None (this is a founder) —</option></select>
+        </label>
+        <label class="field">Date entered
+          <input type="date" id="f-date" />
+        </label>
+      </div>
+      <div class="row2">
+        <label class="field">Acquisition type
+          <select id="f-acqtype"><option value="">—</option><option>finished</option><option>cutting</option><option>TC</option><option>division</option></select>
+        </label>
+        <label class="field">Condition at intake
+          <input id="f-condition" placeholder="e.g. healthy, 4 leaves" />
+        </label>
+      </div>
+      <hr class="rule" />
+      <div class="label" style="margin-bottom:10px;">Where we got it</div>
+      <div class="row2">
+        <label class="field">Source name
+          <input id="f-srcname" placeholder="Vendor / seller" />
+        </label>
+        <label class="field">Source price
+          <input id="f-cost" type="number" step="0.01" placeholder="0.00" />
+        </label>
+      </div>
+      <div class="row2">
+        <label class="field">Source website
+          <input id="f-srcweb" placeholder="https://" />
+        </label>
+        <label class="field">Source phone
+          <input id="f-srcphone" placeholder="" />
+        </label>
+      </div>
+      <label class="field">Source address
+        <input id="f-srcaddr" placeholder="" />
+      </label>
+      <hr class="rule" />
+      <div class="row2">
+        <label class="field">Location / zone
+          <input id="f-zone" placeholder="Rack 1 / Hoya bench / Quarantine" />
+        </label>
+        <label class="field">Pot type
+          <select id="f-pot"><option value="">—</option><option>glass</option><option>terracotta</option><option>matte black</option></select>
+        </label>
+      </div>
+      <div class="row2">
+        <label class="field">Target price<input id="f-target" type="number" step="0.01" placeholder="0.00" /></label>
+        <label class="field">Current value<input id="f-value" type="number" step="0.01" placeholder="0.00" /></label>
+      </div>      <label class="field">Notes
+        <textarea id="f-notes" rows="2" placeholder="Anything to remember about this specimen."></textarea>
+      </label>
+      <div style="display:flex;gap:12px;margin-top:8px;">
+        <button type="submit" class="btn btn-primary">Add to Collection</button>
+        <button type="button" class="btn" id="add-cancel">Cancel</button>
+      </div>
+      <div class="auth-msg muted" id="add-msg"></div>
+    </form>
+  </div>
+
+  <!-- PLANT PAGE -->
+  <div id="v-plant" class="view hidden">
+    <button class="btn btn-sm" id="plant-back" style="margin-top:18px;">‹ Back</button>
+    <div id="plant-body"></div>
+  </div>
+
+
+  <!-- SUPPLIES -->
+  <div id="v-supplies" class="view hidden">
+    <div class="view-head" style="display:flex;justify-content:space-between;align-items:flex-end;">
+      <div><h2>Supplies</h2><div class="sub" id="sup-count">&mdash;</div></div>
+      <button class="btn btn-sm" id="go-add-supply">+ Add supply</button>
+    </div>
+    <div id="sup-reorder"></div>
+    <input type="text" id="sup-search" placeholder="Search supplies..." style="margin-bottom:12px;" />
+    <div id="sup-list"></div>
+    <div id="sup-form" class="hidden" style="margin-top:10px;background:#15140f;border:1px solid var(--line);border-radius:3px;padding:16px;">
+      <div class="row2">
+        <label class="field">Item name<input id="s-name" placeholder="e.g. Dyna-Gro Foliage-Pro" /></label>
+        <label class="field">Category<select id="s-cat"><option value="">&mdash;</option><option>fertilizer</option><option>medium</option><option>amendment</option><option>pot</option><option>packing</option><option>flower</option><option>tool</option><option>other</option></select></label>
+      </div>
+      <div class="row2">
+        <label class="field">Quantity on hand<input id="s-qty" type="number" step="any" placeholder="0" /></label>
+        <label class="field">Unit<input id="s-unit" placeholder="ml, g, each, bag, ft" /></label>
+      </div>
+      <div class="row2">
+        <label class="field">Amount used per use<input id="s-use" type="number" step="any" placeholder="e.g. 5" /></label>
+        <label class="field">Reorder when at<input id="s-reorder" type="number" step="any" placeholder="e.g. 100" /></label>
+      </div>
+      <div class="row2">
+        <label class="field">Unit cost<input id="s-cost" type="number" step="0.01" placeholder="0.00" /></label>
+        <label class="field">Vendor<input id="s-vendor" placeholder="Amazon, etc." /></label>
+      </div>
+      <label class="field">Reorder link<input id="s-url" placeholder="https://... where you buy it" /></label>
+      <div style="display:flex;gap:10px;">
+        <button type="button" class="btn btn-primary btn-sm" id="sup-save">Save supply</button>
+        <button type="button" class="btn btn-sm" id="sup-cancel">Cancel</button>
+      </div>
+      <div class="auth-msg muted" id="sup-msg"></div>
+    </div>
+  </div></section>
+
+<!-- NAV -->
+<nav class="nav hidden" id="nav">
+  <button data-go="today" class="active"><span class="ic">◷</span>Today</button>
+  <button data-go="collection"><span class="ic">❖</span>Collection</button>
+  <button data-go="supplies"><span class="ic">&#9636;</span>Supplies</button>
+  <button data-go="add"><span class="ic">+</span>Add</button>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="app.js"></script>
+</body>
+</html>
