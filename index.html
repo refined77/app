@@ -15,7 +15,7 @@
     --cream:#F1E5C9; --gold:#B8975A; --gold-old:#9A7B43; --champagne:#D9C290;
     --garnet:#91241C; --garnet-bright:#B23A2E; --oxblood:#5E1712;
     --fern:#4C5B39; --sage:#676F55; --eucalyptus:#97A07F;
-    --muted:rgba(241,229,201,.58); --line:rgba(184,151,90,.35);
+    --muted:rgba(241,229,201,.74); --line:rgba(184,151,90,.40);
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;background:var(--noir);color:var(--cream);
@@ -88,11 +88,11 @@
 
   /* Collection grid */
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:3px;overflow:hidden;transition:.18s;cursor:pointer;}
-  .card:hover{border-color:var(--gold);}
-  .card .thumb{height:150px;background:#0d0d0d center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:var(--sage);font-size:34px;font-family:'Cormorant Garamond',serif;}
-  .card .body{padding:12px 14px 14px;}
-  .card .nm{font-family:'Cormorant Garamond',serif;font-size:19px;font-style:italic;color:var(--cream);}
+  .card{background:linear-gradient(180deg,#1c1a16,#171511);border:1px solid var(--line);border-radius:5px;overflow:hidden;transition:.18s;cursor:pointer;}
+  .card:hover{border-color:var(--gold);transform:translateY(-3px);box-shadow:0 8px 22px rgba(0,0,0,.35);}
+  .card .thumb{height:184px;background:#0d0d0d center/cover no-repeat;display:flex;align-items:center;justify-content:center;color:var(--sage);font-size:40px;font-family:'Cormorant Garamond',serif;}
+  .card .body{padding:15px 16px 17px;}
+  .card .nm{font-family:'Cormorant Garamond',serif;font-size:22px;font-style:italic;color:var(--cream);line-height:1.1;}
   .card .code{font-size:10px;letter-spacing:.14em;color:var(--gold);margin-top:3px;}
   .card .meta{margin-top:9px;display:flex;align-items:center;gap:7px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}
   .dot{width:6px;height:6px;border-radius:50%;background:var(--garnet);display:inline-block;}
@@ -105,15 +105,18 @@
   /* Plant page */
   .pp-hero{display:grid;grid-template-columns:300px 1fr;gap:24px;margin-top:8px;}
   @media(max-width:640px){.pp-hero{grid-template-columns:1fr;}}
-  .pp-cover{height:320px;background:#0d0d0d center/cover no-repeat;border:1px solid var(--line);border-radius:3px;display:flex;align-items:center;justify-content:center;color:var(--sage);font-size:60px;font-family:'Cormorant Garamond',serif;}
-  .pp-name{font-size:38px;font-style:italic;}
-  .pp-code{font-size:12px;letter-spacing:.18em;color:var(--gold);margin-top:6px;}
+  .pp-cover{height:340px;background:#0d0d0d center/cover no-repeat;border:1px solid var(--gold);border-radius:4px;display:flex;align-items:center;justify-content:center;color:var(--sage);font-size:60px;font-family:'Cormorant Garamond',serif;box-shadow:0 6px 22px rgba(0,0,0,.4);}
+  .pp-reg{font-size:10px;letter-spacing:.32em;text-transform:uppercase;color:var(--gold);margin-bottom:7px;}
+  .pp-name{font-size:46px;font-style:italic;line-height:1.02;}
+  .pp-code{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);margin-top:8px;}
+  .tended{font-size:13.5px;line-height:1.95;color:var(--cream);}
+  .tended .tg{color:var(--gold);}
   .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
   .chip{border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--cream);}
   .kv{display:grid;grid-template-columns:150px 1fr;gap:6px 16px;margin-top:18px;font-size:14px;}
   .kv .k{color:var(--gold);font-size:11px;letter-spacing:.1em;text-transform:uppercase;padding-top:2px;}
   .section-t{margin-top:30px;}
-  .pp-story{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:15px;color:var(--eucalyptus);margin-top:10px;line-height:1.5;max-width:52ch;}
+  .pp-story{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:17px;color:var(--eucalyptus);margin-top:12px;line-height:1.6;max-width:54ch;}
   .roomnote{background:#15140f;border-left:3px solid var(--gold);border-radius:2px;padding:11px 13px;font-size:13px;line-height:1.55;color:var(--cream);}
 
   .toast{position:fixed;bottom:90px;left:50%;transform:translateX(-50%);background:var(--panel);border:1px solid var(--gold);

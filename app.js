@@ -232,6 +232,15 @@ function storyLine(p){
   if(p.mother_id) return "Of the "+(p.house||"founding")+" line — propagated and grown slowly in our Houston study, tended and photographed with care.";
   return "Founder of the "+(p.house||"")+" line"+(yr?", established "+yr:"")+" — grown slowly in our Houston study, tended with care.";
 }
+function tendedSummary(care){
+  if(!care||!care.length) return '';
+  const last=a=>{const c=care.find(x=>x.action===a);return c?shortWhen(c.done_at):null;};
+  const out=[];
+  const w=last('Watered'); if(w) out.push('Watered <span class="tg">'+w+'</span>');
+  const f=last('Fed'); if(f) out.push('Fed <span class="tg">'+f+'</span>');
+  const r=care[0]; if(r) out.push('Last tended <span class="tg">'+shortWhen(r.done_at)+'</span>');
+  return out.join(' &nbsp;·&nbsp; ');
+}
 function renderPlant(p, mother, kids, care, photos, health){
   window.CURRENT_PLANT = p;
   const cover = p.cover_photo_url? `style="background-image:url('${p.cover_photo_url}')"` : "";
@@ -240,8 +249,9 @@ function renderPlant(p, mother, kids, care, photos, health){
     <div class="pp-hero">
       <div class="pp-cover" ${cover}>${p.cover_photo_url?'':'❦'}</div>
       <div>
+        <div class="pp-reg">Reverie Registry № BR-${pad(p.plant_no)}</div>
         <div class="pp-name italic">${p.unique_name||p.common_name||"Unnamed"}</div>
-        <div class="pp-code">${lineageCode(p)} &nbsp;·&nbsp; ${p.house||""}</div>
+        <div class="pp-code">${p.house?p.house+' line':'Founding line'} &nbsp;·&nbsp; Gen ${roman(p.generation||1)}${p.cultivar?` &nbsp;·&nbsp; ${p.cultivar}`:''}</div>
         <div class="pp-story">${storyLine(p)}</div>
         <div class="chips">
           <span class="chip"><span class="dot"></span> ${p.status||""}</span>
@@ -259,6 +269,7 @@ function renderPlant(p, mother, kids, care, photos, health){
         </div>
       </div>
     </div>
+    ${tendedSummary(care)?`<div class="section-t"><div class="label flank" style="justify-content:flex-start;">TENDED</div><div class="tended" style="margin-top:10px;">${tendedSummary(care)}</div></div>`:""}
     <div class="section-t">
       <div class="label flank" style="justify-content:flex-start;">IN YOUR ROOM</div>
       <div class="roomnote" style="margin-top:10px;">${roomCareNote(p)}</div>
