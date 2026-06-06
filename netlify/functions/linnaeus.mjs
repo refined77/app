@@ -96,11 +96,13 @@ export default async (req) => {
     });
   } catch { return json({ error: "Could not reach Linnaeus." }, 502); }
 
-  let data;
-  try { data = await upstream.json(); } catch { return json({ error: "Bad response." }, 502); }
-  if (!upstream.ok) return json({ error: "Linnaeus API error.", detail: data?.error?.message || "" }, upstream.status || 502);
+  const raw = await upstream.text();
+  let data; try { data = JSON.parse(raw); } catch { data = null; }
+  if (!upstream.ok) {
+    return json({ error: "Linnaeus API error.", status: upstream.status, detail: (data && data.error && data.error.message) || (raw ? raw.slice(0, 300) : "(empty response)") }, upstream.status || 502);
+  }
 
-  const text = Array.isArray(data.content)
+  const text = (data && Array.isArray(data.content))
     ? data.content.filter((b) => b && b.type === "text").map((b) => b.text).join("").trim()
     : "";
 
