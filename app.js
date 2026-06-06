@@ -32,7 +32,7 @@ function showApp(user){
   el.auth.classList.add("hidden"); el.app.classList.remove("hidden"); el.nav.classList.remove("hidden");
   const nm = (user.email||"").split("@")[0];
   window.ME = nm.charAt(0).toUpperCase()+nm.slice(1); $("who-name").textContent = window.ME;
-  go("today");
+  go(hasAddDraft()? "add":"today");   // if an add was interrupted, resume it instead of losing it
 }
 $("au-switch").onclick = (e)=>{ e.preventDefault(); signUpMode=!signUpMode;
   $("au-submit").textContent = signUpMode? "Create account":"Sign in";
@@ -74,7 +74,7 @@ function go(name){
 }
 document.querySelectorAll(".nav button").forEach(b=> b.onclick=()=>{ if(b.dataset.go==='collection') collFilter=null; go(b.dataset.go); });
 $("go-add").onclick=()=>go("add");
-$("add-cancel").onclick=()=>go("collection");
+$("add-cancel").onclick=()=>{ addDraftClear(); go("collection"); };
 $("plant-back").onclick=()=>go("collection");
 
 /* ---------- data ---------- */
@@ -95,6 +95,8 @@ async function loadToday(){
   const mothers = plants.filter(p=>p.status==="Mother Plant").length;
   const recentRes = await sb.from("care_log").select("action,done_at,done_by_name,plant_id,plant(unique_name)").order("done_at",{ascending:false}).limit(12);
   const recent = recentRes.data || [];
+  let review=[];
+  try{ const rr=await sb.from("plant").select("id,unique_name,common_name,botanical_name").eq("needs_id_review",true).limit(20); review=rr.data||[]; }catch(e){}
   const wateredRes = await sb.from("care_log").select("plant_id,done_at").eq("action","Watered");
   const lastW = {};
   (wateredRes.data||[]).forEach(w=>{ const t=new Date(w.done_at).getTime(); if(!lastW[w.plant_id]||t>lastW[w.plant_id]) lastW[w.plant_id]=t; });
@@ -116,6 +118,8 @@ async function loadToday(){
       <div style="margin-top:10px;"><button type="button" class="btn btn-sm btn-gold" onclick="todayBrief()">✦ What needs attention</button></div>
       <div id="ai-today" class="roomnote" style="display:none;margin-top:10px;white-space:pre-wrap;"></div>
     </div>
+    ${review.length?`<div class="section-t"><div class="label flank" style="justify-content:flex-start;">NEEDS ID — LINNAEUS FLAGGED (${review.length})</div>
+      <div style="margin-top:10px;">${review.map(r=>`<div onclick="openPlant('${r.id}')" style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:9px 0;font-size:14px;cursor:pointer;"><span><span class="dot"></span> ${r.unique_name||r.common_name||'Unnamed'}</span><span class="muted" style="font-size:11px;">${r.botanical_name||'no species'} · tap to fix</span></div>`).join('')}</div></div>`:''}
     <div class="section-t"><div class="label flank" style="justify-content:flex-start;">CHECK &amp; WATER</div>
       <div style="margin-top:10px;">${ needs.length ? needs.slice(0,12).map(x=>`
         <div onclick="openPlant('${x.p.id}')" style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:9px 0;font-size:14px;cursor:pointer;">
@@ -252,14 +256,14 @@ function fillSelect(id, arr, placeholder){
   s.innerHTML = (placeholder?`<option value="">${placeholder}</option>`:"") + arr.map(v=>`<option>${v}</option>`).join("");
 }
 function resetAddVis(){
-  ["f-cond-other","f-cond-quar","f-zone-other","f-shelf-wrap","f-pot-other","f-addname","f-vdup","f-name-sug","f-inherit","f-recipe","f-cult-add","f-photo-note","f-verify-note"].forEach(id=>{ const e=$(id); if(e) e.style.display="none"; });
+  ["f-cond-other","f-cond-quar","f-zone-other","f-shelf-wrap","f-pot-other","f-addname","f-vdup","f-name-sug","f-inherit","f-recipe","f-cult-add","f-photo-note","f-verify-note","f-id-suggest"].forEach(id=>{ const e=$(id); if(e) e.style.display="none"; });
   const vs=$("f-vsug"); if(vs){ vs.classList.remove("open"); vs.innerHTML=""; }
 }
 
 async function setupAddForm(){
   const f=$("add-form"); if(!f) return;
   f.reset();
-  addPhotoFile=null; verifyOK=false;
+  addPhotoFile=null; verifyOK=false; window.__lastIdentify=null; window.__newlyTypedName=null;
   const pimg=$("f-photo-preview"); if(pimg){ pimg.src=""; pimg.style.display="none"; }
   const ppr=$("f-photo-prompt"); if(ppr) ppr.style.display="block";
   const pz=$("f-photo-zone"); if(pz) pz.classList.remove("bad");
@@ -279,6 +283,7 @@ async function setupAddForm(){
   resetAddVis();
   applyAcq("");
   if(!addWired){ wireAddForm(); addWired=true; }
+  addDraftRestore();   // bring back an interrupted add (text fields; photo re-added)
 }
 
 function applyAcq(t){
@@ -351,8 +356,9 @@ async function saveNewName(){
   if(error) return warn(error.message);
   SPECIES.push(data); SPECIES.sort((a,b)=>(a.botanical_name||"").localeCompare(b.botanical_name||""));
   renderBotanical(); $("f-botanical").value=bot; onBotanical();
+  window.__newlyTypedName=bot;   // hand-typed → Linnaeus flags it for your review
   $("f-addname").style.display="none"; $("an-bot").value=""; $("an-common").value=""; $("an-medium").value=""; msg.style.display="none";
-  toast(bot+" added to the catalog.");
+  toast(bot+" added — Linnaeus will flag it for your review.");
 }
 
 function wireAddForm(){
@@ -368,6 +374,7 @@ function wireAddForm(){
     const quar = condSel.has("Pest seen")||condSel.has("Disease seen");
     $("f-cond-quar").style.display = quar?"block":"none";
     if(quar) $("f-status").value="Quarantine";
+    addDraftSave();
   });
   $("f-zone").addEventListener("change", ()=>{
     const z=$("f-zone").value;
@@ -401,11 +408,13 @@ function wireAddForm(){
       note.innerHTML="Photo bounced — "+q.issues.join("; ")+". Please retake.";
       return;
     }
-    addPhotoFile=file; verifyOK=false;
+    addPhotoFile=file; verifyOK=false; window.__lastIdentify=null;
     const vnote=$("f-verify-note"); if(vnote) vnote.style.display="none";
     const img=$("f-photo-preview"), pr=$("f-photo-prompt");
     img.src=URL.createObjectURL(file); img.style.display="block"; pr.style.display="none";
     $("f-photo-zone").classList.remove("bad");
+    addDraftSave();
+    runIdentify(file);   // auto-suggest species from the photo
   });
   // cultivar add-new
   $("f-cultivar").addEventListener("change", ()=>{
@@ -416,6 +425,9 @@ function wireAddForm(){
     ensureCultivar(v); $("f-cult-add").style.display="none"; $("f-cult-new").value="";
   });
   $("f-cult-cancel").addEventListener("click", ()=>{ $("f-cult-add").style.display="none"; $("f-cult-new").value=""; });
+  $("f-id-suggest").addEventListener("click", e=>{ const c=e.target.closest(".chip"); if(!c) return; acceptCandidate(c.dataset.bot, c.dataset.com); });
+  $("add-form").addEventListener("input", addDraftSave);
+  $("add-form").addEventListener("change", addDraftSave);
   $("add-form").addEventListener("submit", submitAdd);
 }
 
@@ -455,25 +467,6 @@ async function submitAdd(e){
     const first=$(bad[0]); if(first&&first.scrollIntoView) first.scrollIntoView({behavior:"smooth",block:"center"});
     return;
   }
-  // Linnaeus photo verification — the stubbed ✓ / ⚠ check, live once the function is deployed.
-  if(!verifyOK && addPhotoFile){
-    const vn=$("f-verify-note");
-    m.style.color=""; m.textContent="Linnaeus is checking the photo…";
-    const v=await linnaeusVerify(bot, $("f-common").value, addPhotoFile);
-    m.textContent="";
-    if(v && v.result){
-      const r=v.result;
-      if(r.match===false && r.confidence!=="low"){
-        vn.style.display="block"; vn.className="fnote warn";
-        vn.innerHTML='⚠ Linnaeus thinks this looks like <b>'+(r.looks_like||'something else')+'</b>, not <b>'+bot+'</b>. '+(r.note||'')+' <a id="vconfirm">Confirm anyway</a> &nbsp;·&nbsp; <a id="vchange">Change name</a>';
-        $("vconfirm").onclick=()=>{ verifyOK=true; vn.style.display="none"; submitAdd(e); };
-        $("vchange").onclick=()=>{ vn.style.display="none"; markBad("f-botanical"); $("f-botanical").scrollIntoView({behavior:"smooth",block:"center"}); };
-        return;
-      }
-      verifyOK=true;
-      if(r.match===true){ vn.style.display="block"; vn.className="fnote"; vn.innerHTML="Linnaeus verified ✓ "+(r.note||""); }
-    } else { verifyOK=true; } // AI unavailable (e.g. local preview) — don't block the save
-  }
   m.textContent="Adding…";
   let loc = zone==="Other" ? $("f-zone-other").value.trim() : zone;
   if(/^Rack/.test(zone)) loc = zone+" · "+$("f-shelf").value;
@@ -511,8 +504,11 @@ async function submitAdd(e){
       }
     }catch(err){ toast("Plant saved — photo failed: "+err.message); }
   }
+  // ID review flag + Linnaeus's suggestion (uses migration columns; degrades gracefully until they exist)
+  try{ await sb.from("plant").update({ needs_id_review: computeIdFlag(bot), ai_suggestion: window.__lastIdentify||null }).eq("id", data.id); }catch(e){}
   await fetchPlants(); await loadVendors();
-  $("add-form").reset(); condSel=new Set(); addPhotoFile=null; verifyOK=false;
+  addDraftClear();
+  $("add-form").reset(); condSel=new Set(); addPhotoFile=null; verifyOK=false; window.__lastIdentify=null; window.__newlyTypedName=null;
   $("f-photo-preview").style.display="none"; $("f-photo-prompt").style.display="block";
   resetAddVis(); applyAcq("");
   toast((rec.unique_name||"Plant")+" entered the collection.");
@@ -562,6 +558,7 @@ function renderPlant(p, mother, kids, care, photos, health){
   const cover = p.cover_photo_url? `style="background-image:url('${p.cover_photo_url}')"` : "";
   $("plant-body").innerHTML = `
     <div style="display:flex;gap:8px;align-items:center;margin:6px 0 16px;"><button class="btn btn-sm" onclick="go('collection')">‹ Back</button><button class="btn btn-sm" onclick="editPlant()">Edit</button><span style="flex:1;"></span><button class="btn btn-sm" onclick="askDelete()" style="border-color:var(--garnet);color:var(--garnet-bright);">Delete</button></div>
+    ${p.needs_id_review?renderResolve(p):''}
     <div class="pp-hero">
       <div class="pp-cover" ${cover}>${p.cover_photo_url?'':'❦'}</div>
       <div>
@@ -575,6 +572,8 @@ function renderPlant(p, mother, kids, care, photos, health){
           <span class="chip">Gen ${roman(p.generation||1)}</span>
         </div>
         <div class="kv">
+          ${kv("Species", p.botanical_name)}
+          ${kv("Common name", p.common_name)}
           ${kv("Date entered", p.date_entered)}
           ${kv("Acquired as", p.acquisition_type)}
           ${kv("Source", p.source_name)}
@@ -663,10 +662,116 @@ async function linnaeusVerify(botanical, common, file){
   const img=await fileToB64(file); if(!img) return null;
   return await askLinnaeus({mode:"verify", botanical_name:botanical, common_name:common, image_b64:img.b64, media_type:img.media});
 }
+
+/* ----- AI identify: suggest species candidates from the photo, no typing needed ----- */
+window.__lastIdentify=null; window.__newlyTypedName=null;
+async function runIdentify(file){
+  const box=$("f-id-suggest"); if(!file){ if(box) box.style.display="none"; return; }
+  if(box){ box.style.display="block"; box.innerHTML='<span class="muted" style="font-size:12px;">✦ Linnaeus is identifying…</span>'; }
+  const img=await fileToB64(file); if(!img){ if(box) box.style.display="none"; return; }
+  const v=await askLinnaeus({mode:"identify", image_b64:img.b64, media_type:img.media});
+  if(!v || v.error || !v.result || !Array.isArray(v.result.candidates) || !v.result.candidates.length){
+    window.__lastIdentify=null;
+    if(box) box.innerHTML='<span class="muted" style="font-size:12px;">'+((v&&v.error)?("Linnaeus: "+v.error):"Linnaeus couldn’t ID this one — pick from the list or type the name.")+'</span>';
+    return;
+  }
+  window.__lastIdentify=v.result;
+  renderIdCandidates(v.result);
+}
+function idChip(c, onclickAttr){
+  return `<span class="chip pick" ${onclickAttr} data-bot="${escAttr(c.botanical||'')}" data-com="${escAttr(c.common||'')}">${c.botanical||'?'}${c.common?` — ${c.common}`:''}${c.confidence?` · ${c.confidence}`:''}</span>`;
+}
+function renderIdCandidates(res){
+  const box=$("f-id-suggest"); if(!box) return;
+  box.style.display="block";
+  box.innerHTML='<div class="label" style="margin-bottom:8px;">✦ Linnaeus sees — tap to use</div>'+
+    '<div class="chips">'+res.candidates.map(c=>idChip(c,'')).join('')+'</div>'+
+    (res.note?`<div class="fnote" style="margin-top:8px;">${res.note}</div>`:'');
+}
+async function acceptCandidate(bot, com){
+  if(!bot) return;
+  if(!SPECIES.some(s=>(s.botanical_name||'').toLowerCase()===bot.toLowerCase())){
+    try{ const {data}=await sb.from("species").insert({botanical_name:bot, common_name:com||null}).select().single();
+      if(data){ SPECIES.push(data); SPECIES.sort((a,b)=>(a.botanical_name||'').localeCompare(b.botanical_name||'')); renderBotanical(); } }catch(e){}
+  }
+  ensureBotanical(bot); $("f-botanical").value=bot; onBotanical();
+  if(com) $("f-common").value=com;
+  window.__newlyTypedName=null;          // accepted from Linnaeus, not hand-typed
+  $("f-addname").style.display="none";
+  addDraftSave();
+}
+function computeIdFlag(bot){
+  const idf=window.__lastIdentify;
+  if(!idf || !Array.isArray(idf.candidates) || !idf.candidates.length) return true;   // no AI read → review
+  const names=idf.candidates.map(c=>(c.botanical||'').toLowerCase());
+  if(names.indexOf((bot||'').toLowerCase())<0) return true;                            // chosen differs from Linnaeus → review
+  if(window.__newlyTypedName && window.__newlyTypedName.toLowerCase()===(bot||'').toLowerCase()) return true; // hand-typed → review
+  return false;
+}
+
+/* ----- Resolve a flagged plant (the "needs attention" fix flow) ----- */
+function renderResolve(p){
+  const cands=(p.ai_suggestion && Array.isArray(p.ai_suggestion.candidates))? p.ai_suggestion.candidates : [];
+  return '<div class="section-t"><div class="roomnote" style="border-left-color:var(--garnet);">'
+    +'<div class="label" style="color:var(--garnet-bright);margin-bottom:8px;">✦ Needs ID — Linnaeus flagged this</div>'
+    +(cands.length? '<div style="font-size:12px;margin-bottom:6px;">Tap the right one:</div><div class="chips">'
+        +cands.map(c=>idChip(c,`onclick="resolveId('${p.id}', this.getAttribute('data-bot'), this.getAttribute('data-com'))"`)).join('')+'</div>'
+      : '<div class="fnote">No stored suggestion — re-identify from the photo.</div>')
+    +'<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">'
+    +'<button type="button" class="btn btn-sm btn-gold" onclick="reIdentifyPlant(\''+p.id+'\')">✦ Re-identify from photo</button>'
+    +'<button type="button" class="btn btn-sm" onclick="clearIdFlag(\''+p.id+'\')">Name is correct</button>'
+    +'</div><div id="reid-out" style="margin-top:8px;"></div></div></div>';
+}
+window.resolveId=async function(id,bot,com){
+  if(!bot) return;
+  try{
+    if(!SPECIES.length){ const {data}=await sb.from("species").select("id,botanical_name,common_name,recommended_medium,cultivar").order("botanical_name"); SPECIES=data||[]; }
+    if(!SPECIES.some(s=>(s.botanical_name||'').toLowerCase()===bot.toLowerCase())){ try{ await sb.from("species").insert({botanical_name:bot, common_name:com||null}); }catch(e){} }
+    await sb.from("plant").update({botanical_name:bot, common_name:com||null, needs_id_review:false}).eq("id",id);
+    toast("Updated to "+bot+".");
+    await fetchPlants(); openPlant(id);
+  }catch(e){ toast("Couldn't update: "+e.message); }
+};
+window.clearIdFlag=async function(id){ try{ await sb.from("plant").update({needs_id_review:false}).eq("id",id); toast("Marked correct."); await fetchPlants(); openPlant(id); }catch(e){ toast("Couldn't update."); } };
+window.reIdentifyPlant=async function(id){
+  const out=$("reid-out"); if(out) out.innerHTML='<span class="muted" style="font-size:12px;">✦ Linnaeus is looking…</span>';
+  const p=window.CURRENT_PLANT||{};
+  const v=await askLinnaeus({mode:"identify", image_url:p.cover_photo_url});
+  if(!v||v.error||!v.result||!(v.result.candidates||[]).length){ if(out) out.innerHTML='<span class="muted" style="font-size:12px;">'+((v&&v.error)?("Linnaeus: "+v.error):"Couldn’t ID — try a clearer photo.")+'</span>'; return; }
+  if(out) out.innerHTML='<div class="chips">'+v.result.candidates.map(c=>idChip(c,`onclick="resolveId('${id}', this.getAttribute('data-bot'), this.getAttribute('data-com'))"`)).join('')+'</div>'+(v.result.note?`<div class="fnote" style="margin-top:6px;">${v.result.note}</div>`:'');
+};
+
+/* ----- Never lose an in-progress Add (autosave the draft) ----- */
+function addDraftSave(){
+  const f=$("add-form"); if(!f) return;
+  const d={};
+  f.querySelectorAll("input,select,textarea").forEach(el=>{ if(el.type==="file"||!el.id) return; d[el.id]=el.value; });
+  d.__cond=[...condSel];
+  if(d["f-acqtype"]||d["f-name"]||d["f-botanical"]||addPhotoFile){ try{ localStorage.setItem("br_add_draft", JSON.stringify(d)); }catch(e){} }
+}
+function addDraftClear(){ try{ localStorage.removeItem("br_add_draft"); }catch(e){} }
+function hasAddDraft(){ try{ return !!localStorage.getItem("br_add_draft"); }catch(e){ return false; } }
+function addDraftRestore(){
+  let d; try{ d=JSON.parse(localStorage.getItem("br_add_draft")||"null"); }catch(e){ d=null; }
+  if(!d) return false;
+  if(d["f-botanical"]) ensureBotanical(d["f-botanical"]);
+  Object.keys(d).forEach(k=>{ if(k==="__cond") return; const el=$(k); if(el) el.value=d[k]; });
+  applyAcq(d["f-acqtype"]||"");
+  if(/^Rack/.test(d["f-zone"]||"")) $("f-shelf-wrap").style.display="block";
+  if(d["f-zone"]==="Other") $("f-zone-other").style.display="block";
+  if(d["f-pot"]==="Other") $("f-pot-other").style.display="block";
+  condSel=new Set(d.__cond||[]);
+  [...$("f-cond-chips").children].forEach(c=>{ if(condSel.has(c.dataset.c)) c.classList.add("on"); });
+  if(condSel.has("Other")) $("f-cond-other").style.display="block";
+  if(d["f-botanical"]) onBotanical();
+  const note=$("add-msg"); if(note){ note.style.color="var(--gold)"; note.textContent="Draft restored — re-add the photo to finish."; }
+  return true;
+}
 window.askPlant=async function(){
   const q=($("ai-q").value||"").trim()||"What does this plant need right now?";
   const ans=$("ai-ans"); ans.style.display="block"; ans.textContent="Linnaeus is thinking…";
-  const v=await askLinnaeus({mode:"advise", plant:plantCtx(window.CURRENT_PLANT), question:q});
+  const p=window.CURRENT_PLANT||{};
+  const v=await askLinnaeus({mode:"advise", plant:plantCtx(p), question:q, image_url:p.cover_photo_url||undefined});
   ans.textContent=(v&&v.text)?v.text:(v&&v.error?("Linnaeus: "+v.error):"No answer.");
 };
 window.diagnoseConcern=function(){

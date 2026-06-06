@@ -29,6 +29,10 @@ If the image is unclear, not a plant, or you cannot tell, use match:false with c
   diagnose: `TASK — Health diagnosis. From the photo and any symptom text, give the single most likely issue tied to OUR grow room and Houston season, with a concrete fix. Respond with ONLY minified JSON, no prose, no code fence:
 {"severity":"watch|moderate|severe","symptom":"<short label, e.g. 'Spider mites'>","likely_cause":"<short>","treatment":"<2–3 short grow-room-specific steps>","note":"<optional one line, '' if none>"}`,
 
+  identify: `TASK — Identify the plant in the photo. Give your most likely identification first, then up to 3 more plausible candidates (most likely → least). Prefer the botanical name staff would actually use; include a common name. Respond with ONLY minified JSON, no prose, no code fence:
+{"candidates":[{"botanical":"<botanical name>","common":"<common name>","confidence":"high|medium|low"}],"note":"<one short sentence, e.g. a tell-tale feature or what would confirm it>"}
+1–4 candidates. If the photo is unclear or not a plant, return an empty candidates array and say why in note.`,
+
   advise: `TASK — Tailored advice for THIS specific plant in our grow room. Answer in brand voice, SHORT and scannable (a few lines or tight bullets). Plain text — no JSON.`,
 
   today: `TASK — Morning brief: "what needs attention today" from the summary provided. Lead with the single most important thing, then 3–6 short bullets max. Plain text — no JSON.`,

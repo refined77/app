@@ -107,7 +107,7 @@ export default async (req) => {
     : "";
 
   // verify/diagnose → structured JSON; advise/today → prose
-  if (mode === "verify" || mode === "diagnose") {
+  if (mode === "verify" || mode === "diagnose" || mode === "identify") {
     const parsed = tryParseJson(text);
     if (!parsed) return json({ error: "Linnaeus gave an unreadable answer.", raw: text }, 502);
     return json({ mode, result: parsed });
