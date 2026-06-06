@@ -72,7 +72,7 @@ function go(name){
   if(name==="add"){ prepAdd(); setupSmartForm(); }
   if(name==="supplies") loadSupplies();
 }
-document.querySelectorAll(".nav button").forEach(b=> b.onclick=()=>go(b.dataset.go));
+document.querySelectorAll(".nav button").forEach(b=> b.onclick=()=>{ if(b.dataset.go==='collection') collFilter=null; go(b.dataset.go); });
 $("go-add").onclick=()=>go("add");
 $("add-cancel").onclick=()=>go("collection");
 $("plant-back").onclick=()=>go("collection");
@@ -105,11 +105,11 @@ async function loadToday(){
     .sort((a,b)=> (b.days===null?99999:b.days)-(a.days===null?99999:a.days));
   $("today-body").innerHTML = `
     <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr));">
-      ${tile("In the collection", total)}
-      ${tile("Collection value", money(value))}
-      ${tile("In quarantine", quarantine)}
-      ${tile("Ready to sell", ready)}
-      ${tile("Mother plants", mothers)}
+      ${tile("In the collection", total, 'all')}
+      ${tile("Collection value", money(value), 'all')}
+      ${tile("In quarantine", quarantine, 'Quarantine')}
+      ${tile("Ready to sell", ready, 'Ready to Sell')}
+      ${tile("Mother plants", mothers, 'Mother Plant')}
     </div>
     <div class="section-t"><div class="label flank" style="justify-content:flex-start;">CHECK &amp; WATER</div>
       <div style="margin-top:10px;">${ needs.length ? needs.slice(0,12).map(x=>`
@@ -135,22 +135,27 @@ function shortWhen(iso){
   if(diff<86400) return Math.floor(diff/3600)+"h ago";
   return d.toLocaleDateString(undefined,{month:"short",day:"numeric"});
 }
-function tile(label,val){
-  return `<div class="card stat" style="cursor:default;"><div class="body">
+function tile(label,val,action){
+  const click = action ? `onclick="selectCollection('${action}')" style="cursor:pointer;"` : `style="cursor:default;"`;
+  return `<div class="card stat" ${click}><div class="body">
     <div class="label">${label}</div>
     <div style="font-family:'Cormorant Garamond',serif;font-size:34px;color:var(--cream);margin-top:6px;">${val}</div>
   </div></div>`;
 }
 
 /* ---------- COLLECTION ---------- */
+let collFilter = null;
+window.selectCollection = function(f){ collFilter = (f && f!=='all') ? f : null; go('collection'); };
 async function loadCollection(){
   const plants = await fetchPlants();
-  $("coll-count").textContent = plants.length+" specimen"+(plants.length===1?"":"s");
-  renderColl(plants);
+  const list = collFilter ? plants.filter(p=>p.status===collFilter) : plants;
+  $("coll-count").textContent = list.length+" specimen"+(list.length===1?"":"s")+(collFilter?` · ${collFilter}`:"");
+  renderColl(list);
 }
 $("coll-search").oninput = (e)=>{
   const q=e.target.value.toLowerCase();
-  renderColl(CACHE.filter(p=>[p.unique_name,p.botanical_name,p.common_name,p.house,lineageCode(p)]
+  const base = collFilter ? CACHE.filter(p=>p.status===collFilter) : CACHE;
+  renderColl(base.filter(p=>[p.unique_name,p.botanical_name,p.common_name,p.house,lineageCode(p)]
     .filter(Boolean).join(" ").toLowerCase().includes(q)));
 };
 function renderColl(plants){
@@ -245,7 +250,7 @@ function renderPlant(p, mother, kids, care, photos, health){
   window.CURRENT_PLANT = p;
   const cover = p.cover_photo_url? `style="background-image:url('${p.cover_photo_url}')"` : "";
   $("plant-body").innerHTML = `
-    <div style="display:flex;gap:8px;margin:6px 0 12px;"><button class="btn btn-sm" onclick="editPlant()">Edit</button><button class="btn btn-sm" onclick="deletePlant()" style="border-color:var(--garnet);color:var(--garnet-bright);">Delete</button></div>
+    <div style="display:flex;gap:8px;align-items:center;margin:6px 0 16px;"><button class="btn btn-sm" onclick="go('collection')">‹ Back</button><button class="btn btn-sm" onclick="editPlant()">Edit</button><span style="flex:1;"></span><button class="btn btn-sm" onclick="askDelete()" style="border-color:var(--garnet);color:var(--garnet-bright);">Delete</button></div>
     <div class="pp-hero">
       <div class="pp-cover" ${cover}>${p.cover_photo_url?'':'❦'}</div>
       <div>
@@ -625,13 +630,21 @@ window.savePlantEdit = async function(){
   toast("Saved.");
   openPlant(currentPlantId);
 };
-window.deletePlant = async function(){
+window.askDelete = function(){
+  var why = prompt("Delete this plant permanently? Type a short reason (logged) — e.g. duplicate, data error, died:");
+  if(why===null) return;                                   // cancelled
+  if(!why.trim()){ toast("A reason is required to delete."); return; }
+  if(!confirm('Permanently delete this plant?\n\nReason: "'+why.trim()+'"\n\nThis cannot be undone.')) return;
+  deletePlant(why.trim());
+};
+window.deletePlant = async function(reason){
   if(!currentPlantId) return;
-  if(!confirm("Delete this plant permanently? This cannot be undone.")) return;
+  var p = window.CURRENT_PLANT;
+  console.log("DELETE", p && (p.unique_name||p.id), "· reason:", reason);
   var res = await sb.from("plant").delete().eq("id", currentPlantId);
   if(res.error){ toast("Can't delete — does it have propagations? ("+res.error.message+")"); return; }
   await fetchPlants();
-  toast("Plant deleted.");
+  toast("Deleted — "+(reason||"no reason"));
   go("collection");
 };
 
