@@ -85,6 +85,14 @@
   .view-head{padding:26px 0 16px;}
   .view-head h2{font-size:30px;letter-spacing:.03em;}
   .view-head .sub{color:var(--muted);font-size:14px;margin-top:4px;}
+  .view-head h2{position:relative;}
+  .view-head h2::after{content:"";display:block;width:54px;height:2px;background:var(--garnet);border-radius:1px;margin-top:10px;}
+  .card.stat{position:relative;}
+  .card.stat::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;background:var(--eucalyptus);opacity:.85;border-radius:2px;}
+  .card.stat .body{padding-left:18px;}
+  .card.stat .body > div:last-child{color:var(--cream);}
+  /* section labels: gold rule + a green grace note */
+  .flank::before,.flank::after{background:linear-gradient(90deg,var(--gold),var(--eucalyptus));}
 
   /* Collection grid */
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;}

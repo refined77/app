@@ -136,7 +136,7 @@ function shortWhen(iso){
   return d.toLocaleDateString(undefined,{month:"short",day:"numeric"});
 }
 function tile(label,val){
-  return `<div class="card" style="cursor:default;"><div class="body">
+  return `<div class="card stat" style="cursor:default;"><div class="body">
     <div class="label">${label}</div>
     <div style="font-family:'Cormorant Garamond',serif;font-size:34px;color:var(--cream);margin-top:6px;">${val}</div>
   </div></div>`;
