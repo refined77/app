@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Passport — Layout Options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;1,400&family=Jost:wght@300;400;500&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --noir:#111111; --cream:#F1E5C9; --gold:#B8975A; --champagne:#D9C290;
+    --garnet:#91241C; --garnet-bright:#B23A2E; --oxblood:#5E1712;
+    --sage:#676F55; --eucalyptus:#97A07F;
+    --muted:rgba(241,229,201,.74); --line:rgba(184,151,90,.40);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--noir);color:var(--cream);font-family:'Jost',system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased;line-height:1.5;padding:0 0 80px;}
+  .wrap{max-width:760px;margin:0 auto;padding:0 18px;}
+  h1,h2,h3{font-family:'Cormorant Garamond',Georgia,serif;font-weight:400;margin:0;}
+  .intro{text-align:center;padding:34px 18px 8px;}
+  .intro .mark{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:40px;color:var(--gold);}
+  .intro p{color:var(--muted);font-size:14px;max-width:46ch;margin:8px auto 0;}
+  .opthead{display:flex;align-items:baseline;gap:12px;margin:46px 0 6px;border-top:1px solid var(--line);padding-top:26px;}
+  .opthead .tag{font-size:11px;letter-spacing:.24em;text-transform:uppercase;color:var(--garnet-bright);}
+  .opthead h2{font-size:30px;font-style:italic;color:var(--cream);}
+  .optdesc{color:var(--muted);font-size:13px;margin:0 0 18px;}
+  .flank{display:flex;align-items:center;gap:12px;font-size:11px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);}
+  .flank::before,.flank::after{content:"";height:1px;flex:1;background:var(--gold);opacity:.5;}
+  .flank.left::before{display:none;} .flank.left{justify-content:flex-start;}
+  .flank.left::after{max-width:60px;}
+  .reg{font-size:10px;letter-spacing:.32em;text-transform:uppercase;color:var(--gold);}
+  .pp-name{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:46px;color:var(--cream);line-height:1;}
+  .house{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);}
+  .idline{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:19px;color:var(--eucalyptus);margin-top:8px;}
+  .idline b{color:var(--cream);font-style:normal;font-family:'Jost';font-size:12px;letter-spacing:.08em;text-transform:uppercase;}
+  .chip{display:inline-block;border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--cream);}
+  .chip.g{background:var(--garnet);border-color:var(--garnet);}
+  .cover{background:linear-gradient(135deg,#1c2a1c,#0d0d0d 70%);display:flex;align-items:center;justify-content:center;color:var(--sage);font-family:'Cormorant Garamond',serif;}
+  .note{background:#15140f;border-left:3px solid var(--gold);border-radius:2px;padding:11px 13px;font-size:13.5px;line-height:1.6;color:var(--cream);}
+  .sec{margin-top:24px;}
+  .tended{font-size:13.5px;line-height:1.95;} .tended .tg{color:var(--gold);}
+  .lin a{color:var(--gold);text-decoration:none;border-bottom:1px solid var(--line);}
+  .muted{color:var(--muted);} .small{font-size:13px;}
+
+  /* A — Registry Card */
+  .A .cover{height:300px;border:1px solid var(--gold);border-radius:4px;font-size:54px;box-shadow:0 6px 22px rgba(0,0,0,.4);margin-bottom:18px;}
+
+  /* B — The Passport (credential) */
+  .B .doc{display:flex;gap:18px;border:1px solid var(--gold);border-radius:5px;padding:16px;background:linear-gradient(180deg,#1a1812,#141210);}
+  .B .doc .left{flex:none;width:150px;}
+  .B .cover{height:150px;border-radius:3px;font-size:34px;border:1px solid var(--line);}
+  .B .qr{margin-top:10px;height:64px;border:1px solid var(--line);border-radius:3px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:9px;letter-spacing:.2em;background:repeating-linear-gradient(45deg,#0d0d0d,#0d0d0d 4px,#15140f 4px,#15140f 8px);}
+  .B .kv{display:grid;grid-template-columns:120px 1fr;gap:7px 14px;font-size:13.5px;}
+  .B .kv .k{color:var(--gold);font-size:10px;letter-spacing:.12em;text-transform:uppercase;padding-top:3px;}
+  @media(max-width:560px){ .B .doc{flex-direction:column;} .B .doc .left{width:100%;} .B .cover{height:200px;} }
+
+  /* C — Gallery */
+  .C .hero{position:relative;height:340px;border-radius:5px;overflow:hidden;display:flex;align-items:flex-end;
+    background:linear-gradient(135deg,#1c2a1c,#0d0d0d 70%);}
+  .C .hero .reg{position:absolute;top:14px;left:16px;}
+  .C .hero .glyph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--sage);font-family:'Cormorant Garamond',serif;font-size:64px;opacity:.5;}
+  .C .hero .cap{position:relative;width:100%;padding:40px 18px 16px;background:linear-gradient(180deg,transparent,rgba(8,7,5,.92));}
+  .C details{border-bottom:1px solid var(--line);padding:4px 0;}
+  .C summary{cursor:pointer;list-style:none;padding:13px 2px;font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--gold);}
+  .C summary::-webkit-details-marker{display:none;}
+  .C summary::after{content:"＋";float:right;color:var(--muted);}
+  .C details[open] summary::after{content:"–";}
+  .C .body{padding:2px 2px 14px;}
+</style>
+</head>
+<body>
+  <div class="intro">
+    <div class="mark">Three Passports, one plant.</div>
+    <p>Same specimen — Hazel — shown three ways. Scroll through, then tell Linnaeus which one feels like Botanical Reverie (or mix-and-match).</p>
+  </div>
+
+  <div class="wrap">
+
+    <!-- OPTION A -->
+    <div class="opthead"><span class="tag">Option A</span><h2>Registry Card</h2></div>
+    <p class="optdesc">Editorial and airy. Photo leads, the name is the hero, everything stacked with quiet gold labels. Classic Botanical Reverie.</p>
+    <div class="A">
+      <div class="cover">❦</div>
+      <div class="reg">Reverie Registry № BR-0001</div>
+      <div class="pp-name">Hazel</div>
+      <div class="house">House of Hazel · Generation I</div>
+      <div class="idline"><b>Species</b> &nbsp;Monstera deliciosa &nbsp;·&nbsp; <b>Common</b> &nbsp;Swiss Cheese Plant</div>
+      <div style="margin-top:12px;"><span class="chip g">Mother Plant</span> <span class="chip">Variegated</span> <span class="chip">Rack 1 · Shelf 2</span></div>
+      <div class="sec"><div class="flank left">Tended</div><div class="tended" style="margin-top:8px;">Watered <span class="tg">2 days ago</span> &nbsp;·&nbsp; Fed <span class="tg">1 week ago</span> &nbsp;·&nbsp; Last tended <span class="tg">2 days ago</span></div></div>
+      <div class="sec"><div class="flank left">In your room</div><div class="note" style="margin-top:8px;">At home in the room — 60%+ humidity under the grow lights. Variegated, so she sits high for light. Check the top inch and water only if dry.</div></div>
+      <div class="sec"><div class="flank left">Lineage — House of Hazel</div><div class="small lin" style="margin-top:8px;">Founder of this House, established 2024.<br>Offspring: <a href="#">Hazel II</a> · <a href="#">Hazel III</a></div></div>
+    </div>
+
+    <!-- OPTION B -->
+    <div class="opthead"><span class="tag">Option B</span><h2>The Passport</h2></div>
+    <p class="optdesc">A credential. Reads like an official document — photo + registry seal on the left, a clean spec table on the right. Leans into the "a name to trust" registry idea.</p>
+    <div class="B">
+      <div class="doc">
+        <div class="left">
+          <div class="cover">❦</div>
+          <div class="qr">QR · BR-0001</div>
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div class="reg">Reverie Registry № BR-0001</div>
+          <div class="pp-name" style="font-size:38px;margin:4px 0 2px;">Hazel</div>
+          <div class="house" style="margin-bottom:14px;">House of Hazel · Generation I</div>
+          <div class="kv">
+            <div class="k">Species</div><div style="font-style:italic;font-family:'Cormorant Garamond',serif;font-size:16px;">Monstera deliciosa</div>
+            <div class="k">Common</div><div>Swiss Cheese Plant</div>
+            <div class="k">Status</div><div>Mother Plant · Variegated</div>
+            <div class="k">Zone</div><div>Rack 1 · Shelf 2</div>
+            <div class="k">Acquired</div><div>2024 · Founder</div>
+            <div class="k">Value</div><div>$120 <span class="muted small">(admin only)</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="sec"><div class="flank">Tended</div><div class="tended" style="margin-top:8px;">Watered <span class="tg">2 days ago</span> &nbsp;·&nbsp; Fed <span class="tg">1 week ago</span></div></div>
+      <div class="sec"><div class="flank">In your room</div><div class="note" style="margin-top:8px;">60%+ humidity under the grow lights; variegated, so she sits high for light. Check the top inch, water only if dry.</div></div>
+      <div class="sec"><div class="flank">Lineage</div><div class="small lin" style="margin-top:8px;">Founder, 2024 · Offspring: <a href="#">Hazel II</a> · <a href="#">Hazel III</a></div></div>
+    </div>
+
+    <!-- OPTION C -->
+    <div class="opthead"><span class="tag">Option C</span><h2>Gallery</h2></div>
+    <p class="optdesc">Photo-forward and minimal. The image fills the top with the name laid over it; the details tuck into tap-to-open rows so it stays clean. Most modern / scrollable.</p>
+    <div class="C">
+      <div class="hero">
+        <div class="reg">№ BR-0001</div>
+        <div class="glyph">❦</div>
+        <div class="cap">
+          <div class="pp-name">Hazel</div>
+          <div class="house" style="margin-top:6px;">House of Hazel · Generation I</div>
+        </div>
+      </div>
+      <div class="idline" style="margin:14px 2px 4px;"><b>Species</b> &nbsp;Monstera deliciosa &nbsp;·&nbsp; <b>Common</b> &nbsp;Swiss Cheese Plant</div>
+      <div style="margin:6px 2px 4px;"><span class="chip g">Mother Plant</span> <span class="chip">Variegated</span> <span class="chip">Rack 1 · Shelf 2</span></div>
+      <details open><summary>Tended</summary><div class="body tended">Watered <span class="tg">2 days ago</span> &nbsp;·&nbsp; Fed <span class="tg">1 week ago</span></div></details>
+      <details><summary>In your room</summary><div class="body"><div class="note">60%+ humidity under the grow lights; variegated, so she sits high for light. Check the top inch, water only if dry.</div></div></details>
+      <details><summary>Lineage — House of Hazel</summary><div class="body small lin">Founder, established 2024 · Offspring: <a href="#">Hazel II</a> · <a href="#">Hazel III</a></div></details>
+    </div>
+
+    <div style="text-align:center;margin-top:50px;color:var(--muted);font-size:13px;">Tell Linnaeus: <span style="color:var(--gold);">A, B, or C</span> — or "B's photo with C's sections," etc.</div>
+  </div>
+</body>
+</html>
