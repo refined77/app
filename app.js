@@ -586,8 +586,8 @@ function renderPlant(p, mother, kids, care, photos, health){
   const houseName = p.house || p.unique_name || "—";
   const varieg = /varieg|albo|aurea|mint|thai constellation|variegata/i.test([p.cultivar,p.botanical_name,p.unique_name].filter(Boolean).join(' '));
   const idbits=[];
-  if(p.botanical_name) idbits.push(`<b>Species</b> <span style="color:var(--cream);">${p.botanical_name}</span>`);
-  if(p.common_name) idbits.push(`<b>Common</b> <span style="color:var(--cream);">${p.common_name}</span>`);
+  if(p.botanical_name) idbits.push(`<b>Species</b> <i style="font-family:'Cormorant Garamond',serif;color:var(--cream);">${p.botanical_name}</i>`);
+  if(p.common_name) idbits.push(`<b>Common</b> <span style="font-style:normal;font-family:'Jost',sans-serif;font-size:13px;letter-spacing:.02em;color:var(--cream);">${p.common_name}</span>`);
   const specs=[
     ["Date entered", p.date_entered],
     ["Acquired as", p.acquisition_type],
