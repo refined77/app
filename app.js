@@ -30,8 +30,13 @@ function money(n){ return (n==null||n==="")?"—":"$"+Number(n).toLocaleString(u
 function showAuth(){ el.auth.classList.remove("hidden"); el.app.classList.add("hidden"); el.nav.classList.add("hidden"); }
 function showApp(user){
   el.auth.classList.add("hidden"); el.app.classList.remove("hidden"); el.nav.classList.remove("hidden");
-  const nm = (user.email||"").split("@")[0];
-  window.ME = nm.charAt(0).toUpperCase()+nm.slice(1); $("who-name").textContent = window.ME;
+  const meta = user.user_metadata || {};
+  window.ME = (meta.full_name && meta.full_name.trim())
+    ? meta.full_name.trim()
+    : (user.email||"").split("@")[0].replace(/^./,c=>c.toUpperCase());
+  window.MY_EMAIL = user.email || "";
+  $("who-name").textContent = window.ME;
+  setupAdminNav();
   go(hasAddDraft()? "add":"today");   // if an add was interrupted, resume it instead of losing it
 }
 $("au-switch").onclick = (e)=>{ e.preventDefault(); signUpMode=!signUpMode;
@@ -63,7 +68,7 @@ sb.auth.onAuthStateChange((_e, session)=>{ session? showApp(session.user) : show
 sb.auth.getSession().then(({data})=>{ data.session? showApp(data.session.user) : showAuth(); });
 
 /* ---------- navigation ---------- */
-const views = ["today","collection","add","plant","supplies"];
+const views = ["today","collection","add","plant","supplies","admin"];
 function go(name){
   views.forEach(v=> $("v-"+v).classList.toggle("hidden", v!==name));
   document.querySelectorAll(".nav button").forEach(b=> b.classList.toggle("active", b.dataset.go===name));
@@ -71,7 +76,9 @@ function go(name){
   if(name==="collection") loadCollection();
   if(name==="add"){ setupAddForm(); }
   if(name==="supplies") loadSupplies();
+  if(name==="admin") loadAdmin();
 }
+function setupAdminNav(){ const b=$("nav-admin"); if(b) b.style.display = isAdmin()? "" : "none"; }
 document.querySelectorAll(".nav button").forEach(b=> b.onclick=()=>{ if(b.dataset.go==='collection') collFilter=null; go(b.dataset.go); });
 $("go-add").onclick=()=>go("add");
 $("add-cancel").onclick=()=>{ addDraftClear(); go("collection"); };
@@ -217,8 +224,8 @@ const ZONES = ["Rack 1","Rack 2","Rack 3","Hoya Bench (south window)","Glass cas
 const SHELVES = ["Shelf 1 — top (low light / storage)","Shelf 2 (grow light)","Shelf 3 (grow light)","Shelf 4 (grow light)","Shelf 5 (grow light)"];
 const POTS = ["Clear glass","Weathered terracotta","Matte black","Clear plastic (nursery)","Net pot (semi-hydro)","Other"];
 const CONDS = ["Healthy","Minor stress","Rootbound","Dehydrated","Pest seen","Disease seen","Shipping damage","Other"];
-const ADMINS = ["michi"];   // login name(s) allowed to see/enter pricing — add Laura etc. here later
-function isAdmin(){ return ADMINS.indexOf((window.ME||"").toLowerCase())>=0; }
+const ADMIN_EMAILS = ["hello@botanicalreverie.com"];   // logins with admin access (pricing + Admin tab). Add emails here to grant.
+function isAdmin(){ return ADMIN_EMAILS.indexOf((window.MY_EMAIL||"").toLowerCase())>=0; }
 let condSel = new Set();
 let VENDORS = [];
 let addWired = false;
@@ -832,6 +839,68 @@ window.todayBrief=async function(){
   ans.textContent=(v&&v.text)?v.text:(v&&v.error?("Linnaeus: "+v.error):"No answer.");
 };
 
+
+/* ---------- ADMIN (people, access, daily report) ---------- */
+async function loadAdmin(){
+  const body=$("admin-body");
+  if(!isAdmin()){ body.innerHTML='<div class="empty"><div class="big">Admins only.</div><div>Ask Michi for access.</div></div>'; return; }
+  const today=new Date().toISOString().slice(0,10);
+  body.innerHTML = `
+    <div class="section-t"><div class="label flank" style="justify-content:flex-start;">You</div>
+      <div class="row2" style="margin-top:10px;">
+        <label class="field">Your display name<input id="ad-name" value="${escAttr(window.ME||'')}" placeholder="e.g. Michi" /></label>
+        <label class="field">Login email<input value="${escAttr(window.MY_EMAIL||'')}" readonly /></label>
+      </div>
+      <button type="button" class="btn btn-primary btn-sm" onclick="saveMyName()">Save name</button>
+      <span id="ad-name-msg" class="fnote" style="margin-left:10px;"></span>
+    </div>
+    <div class="section-t"><div class="label flank" style="justify-content:flex-start;">People &amp; access</div>
+      <div class="fnote" style="margin-top:8px;">Send a secure reset link to any teammate's email. New teammate: have them tap "New here? Create your account" on the login (their email + a password), then they set their display name here once.</div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;">
+        <input id="ad-reset-email" placeholder="teammate@email.com" style="flex:1;min-width:180px;" />
+        <button type="button" class="btn btn-sm btn-gold" onclick="sendReset()">Send reset link</button>
+      </div>
+      <div id="ad-reset-msg" class="fnote" style="margin-top:8px;"></div>
+    </div>
+    <div class="section-t"><div class="label flank" style="justify-content:flex-start;">Daily report</div>
+      <div style="margin-top:10px;"><input type="date" id="ad-day" value="${today}" onchange="renderReport(this.value)" style="width:auto;" /></div>
+      <div id="ad-report" style="margin-top:12px;"><span class="muted">Loading…</span></div>
+    </div>`;
+  renderReport(today);
+}
+window.saveMyName=async function(){
+  const name=($("ad-name").value||"").trim(), m=$("ad-name-msg");
+  if(!name){ m.className="fnote warn"; m.textContent="Enter a name."; return; }
+  const {error}=await sb.auth.updateUser({data:{full_name:name}});
+  if(error){ m.className="fnote warn"; m.textContent=error.message; return; }
+  window.ME=name; $("who-name").textContent=name; m.className="fnote"; m.textContent="Saved — you're “"+name+"” now.";
+};
+window.sendReset=async function(){
+  const email=($("ad-reset-email").value||"").trim(), m=$("ad-reset-msg");
+  if(!email){ m.className="fnote warn"; m.textContent="Enter an email."; return; }
+  const {error}=await sb.auth.resetPasswordForEmail(email);
+  if(error){ m.className="fnote warn"; m.textContent=error.message; return; }
+  m.className="fnote"; m.textContent="Reset link sent to "+email+".";
+};
+window.renderReport=async function(day){
+  const out=$("ad-report"); out.innerHTML='<span class="muted">Loading…</span>';
+  const start=day+"T00:00:00", end=day+"T23:59:59.999";
+  let added=[],care=[],health=[],needsId=[];
+  try{ const r=await sb.from("plant").select("id,unique_name,common_name,botanical_name,source_name,acquisition_type").eq("date_entered",day); added=r.data||[]; }catch(e){}
+  try{ const r=await sb.from("care_log").select("action,done_by_name,done_at,plant_id,plant(unique_name)").gte("done_at",start).lte("done_at",end).order("done_at",{ascending:false}); care=r.data||[]; }catch(e){}
+  try{ const r=await sb.from("health_log").select("symptom,created_at,plant_id,plant(unique_name)").gte("created_at",start).lte("created_at",end); health=r.data||[]; }catch(e){}
+  try{ const r=await sb.from("plant").select("id,unique_name,common_name,botanical_name").eq("needs_id_review",true).limit(50); needsId=r.data||[]; }catch(e){}
+  const vendors=[...new Set(added.map(p=>p.source_name).filter(Boolean))];
+  const row=(id,left,right)=>`<div ${id?`onclick="openPlant('${id}')"`:''} style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:8px 0;font-size:13.5px;gap:10px;${id?'cursor:pointer;':''}"><span>${left}</span><span class="muted" style="font-size:11px;white-space:nowrap;">${right||''}</span></div>`;
+  const sect=(t,items)=>`<div style="margin-top:16px;"><div class="label" style="color:var(--gold);">${t} (${items.length})</div>${items.length?items.join(''):'<div class="muted" style="font-size:13px;margin-top:4px;">—</div>'}</div>`;
+  const nm=p=>p&&(p.unique_name||p.common_name)||'Unnamed';
+  out.innerHTML =
+    sect('Added', added.map(p=>row(p.id, nm(p), (p.botanical_name||'')+(p.acquisition_type?' · '+p.acquisition_type:''))))
+   +sect('Care logged', care.map(c=>row(c.plant_id, `<span class="muted">${c.done_by_name||'Someone'}</span> ${String(c.action).toLowerCase()} <span style="font-family:'Cormorant Garamond',serif;font-style:italic;">${c.plant?c.plant.unique_name||'a plant':'a plant'}</span>`, shortWhen(c.done_at))))
+   +sect('Concerns flagged', health.map(h=>row(h.plant_id, `⚠ ${h.symptom||'Concern'} — ${h.plant?h.plant.unique_name||'a plant':'a plant'}`, '')))
+   +sect('New vendors', vendors.map(v=>row(null, v, 'new')))
+   +sect('Needs ID (open)', needsId.map(p=>row(p.id, nm(p), (p.botanical_name||'no species')+' · fix')));
+};
 
 /* ---------- PWA service worker (registers on https) ---------- */
 if ("serviceWorker" in navigator && location.protocol === "https:") {
