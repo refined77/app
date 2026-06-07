@@ -554,10 +554,10 @@ window.openPlant = async function(id){
 function roomCareNote(p){
   var hay = [p.botanical_name,p.common_name,p.medium].filter(Boolean).join(' ').toLowerCase();
   if(/anthurium|warocqueanum|clarinervium|velvet/.test(hay))
-    return "Thin-leaf velvet — keep it in the glass case (75–85% humidity, fan on). The open room at 50–60% runs too dry for these.";
+    return "Thin-leaf velvet — keep it in the glass case (75–85% humidity, fan on). The open conservatory at 60%+ runs too dry for these.";
   if(/hoya|echeveria|sansevieria|succulent|cactus|string of/.test(hay))
-    return "Likes it drier — water only when fully dry. The room's steady airflow suits it well.";
-  return "At home in the room — 50–60% humidity under the grow lights. Check the top inch and water only if it's dry.";
+    return "Likes it drier — water only when fully dry. The conservatory's steady airflow suits it well.";
+  return "At home in the conservatory — 60%+ humidity under the grow lights. Check the top inch and water only if it's dry.";
 }
 function storyLine(p){
   var yr = p.date_entered ? new Date(p.date_entered).getFullYear() : null;
@@ -575,75 +575,76 @@ function tendedSummary(care){
 }
 function renderPlant(p, mother, kids, care, photos, health){
   window.CURRENT_PLANT = p;
-  const cover = p.cover_photo_url? `style="background-image:url('${p.cover_photo_url}')"` : "";
+  const coverBg = p.cover_photo_url? `style="background-image:url('${p.cover_photo_url}')"` : "";
+  const houseName = p.house || p.unique_name || "—";
+  const varieg = /varieg|albo|aurea|mint|thai constellation|variegata/i.test([p.cultivar,p.botanical_name,p.unique_name].filter(Boolean).join(' '));
+  const idbits=[];
+  if(p.botanical_name) idbits.push(`<b>Species</b> <span style="color:var(--cream);">${p.botanical_name}</span>`);
+  if(p.common_name) idbits.push(`<b>Common</b> <span style="color:var(--cream);">${p.common_name}</span>`);
+  const specs=[
+    ["Date entered", p.date_entered],
+    ["Acquired as", p.acquisition_type],
+    ["Source", p.source_name],
+    (isAdmin()&&p.acquisition_cost!=null)?["Cost", money(p.acquisition_cost)]:null,
+    ["Zone", p.location_zone],
+    ["Pot", p.pot_type],
+    ["Soil", p.medium],
+    (isAdmin()&&p.current_value!=null)?["Value", money(p.current_value)]:null,
+  ].filter(s=>s && s[1]);
   $("plant-body").innerHTML = `
     <div style="display:flex;gap:8px;align-items:center;margin:6px 0 16px;"><button class="btn btn-sm" onclick="go('collection')">‹ Back</button><button class="btn btn-sm" onclick="editPlant()">Edit</button><span style="flex:1;"></span><button class="btn btn-sm" onclick="askDelete()" style="border-color:var(--garnet);color:var(--garnet-bright);">Delete</button></div>
     ${p.needs_id_review?renderResolve(p):''}
-    <div class="pp-hero">
-      <div class="pp-cover" ${cover}>${p.cover_photo_url?'':'❦'}</div>
-      <div>
-        <div class="pp-reg">Reverie Registry № BR-${pad(p.plant_no)}</div>
-        <div class="pp-name italic">${p.unique_name||p.common_name||"Unnamed"}</div>
-        <div class="pp-code">${p.house?p.house+' line':'Founding line'} &nbsp;·&nbsp; Gen ${roman(p.generation||1)}${p.cultivar?` &nbsp;·&nbsp; ${p.cultivar}`:''}</div>
-        <div class="pp-story">${storyLine(p)}</div>
-        <div class="chips">
-          <span class="chip"><span class="dot"></span> ${p.status||""}</span>
-          ${p.botanical_name?`<span class="chip italic" style="font-family:'Cormorant Garamond',serif;text-transform:none;letter-spacing:0;font-size:13px;">${p.botanical_name}</span>`:""}
-          <span class="chip">Gen ${roman(p.generation||1)}</span>
-        </div>
-        <div class="kv">
-          ${kv("Species", p.botanical_name)}
-          ${kv("Common name", p.common_name)}
-          ${kv("Date entered", p.date_entered)}
-          ${kv("Acquired as", p.acquisition_type)}
-          ${kv("Source", p.source_name)}
-          ${kv("Cost", p.acquisition_cost!=null?money(p.acquisition_cost):null)}
-          ${kv("Zone", p.location_zone)}
-          ${kv("Pot", p.pot_type)}
-          ${kv("Current value", p.current_value!=null?money(p.current_value):null)}
-        </div>
+    <div class="ghero" ${coverBg}>
+      <div class="greg">Reverie Registry № BR-${pad(p.plant_no)}</div>
+      ${p.cover_photo_url?'':'<div class="gglyph">❦</div>'}
+      <div class="gcap">
+        <div class="gname">${p.unique_name||p.common_name||"Unnamed"}</div>
+        <div class="ghouse">House of ${houseName} &nbsp;·&nbsp; Generation ${roman(p.generation||1)}</div>
       </div>
     </div>
-    ${tendedSummary(care)?`<div class="section-t"><div class="label flank" style="justify-content:flex-start;">TENDED</div><div class="tended" style="margin-top:10px;">${tendedSummary(care)}</div></div>`:""}
+    ${idbits.length?`<div class="idline-c">${idbits.join(' &nbsp;·&nbsp; ')}</div>`:''}
+    <div class="chips-c">
+      <span class="chip g">${p.status||""}</span>
+      ${varieg?'<span class="chip">Variegated</span>':''}
+      ${(p.cultivar&&!varieg)?`<span class="chip">${p.cultivar}</span>`:''}
+      ${p.location_zone?`<span class="chip">${p.location_zone}</span>`:''}
+    </div>
+    <div class="pp-story" style="text-align:center;max-width:54ch;margin:14px auto 0;">${storyLine(p)}</div>
+
+    ${tendedSummary(care)?`<div class="section-t"><div class="label flank">Tended</div><div class="tended" style="margin-top:10px;text-align:center;">${tendedSummary(care)}</div></div>`:""}
+
     <div class="section-t">
-      <div class="label flank" style="justify-content:flex-start;">IN YOUR ROOM</div>
+      <div class="label flank">The Conservatory</div>
       <div class="roomnote" style="margin-top:10px;">${roomCareNote(p)}</div>
     </div>
+
+    ${specs.length?`<div class="section-t"><div class="label flank">Registry</div>
+      <div class="specs">${specs.map(s=>`<div class="r"><span class="k">${s[0]}</span><span class="v">${s[1]}</span></div>`).join('')}</div></div>`:''}
+
     <div class="section-t">
-      <div class="label flank" style="justify-content:flex-start;">PHOTOS</div>
-      <div style="margin-top:10px;"><button type="button" class="btn btn-sm" onclick="addPhoto()">+ Add photo</button></div>
-      <div style="margin-top:12px;">${renderPhotoGrid(photos)}</div>
-    </div>
-    ${p.notes?`<div class="section-t"><div class="label flank" style="justify-content:flex-start;">NOTES</div><p class="muted" style="margin-top:10px;">${p.notes}</p></div>`:""}
-    <div class="section-t">
-      <div class="label flank" style="justify-content:flex-start;">LINEAGE — ${p.house||""}</div>
-      <div style="margin-top:12px;">
-        ${mother?`<div class="muted" style="font-size:13px;">Mother: <a href="#" onclick="openPlant('${mother.id}');return false;">${mother.unique_name||"Unnamed"}</a> (${lineageCode(mother)})</div>`:`<div class="muted" style="font-size:13px;">Founder of this House.</div>`}
-        ${kids.length? `<div style="margin-top:10px;" class="grid">${kids.map(k=>`
-          <div class="card" onclick="openPlant('${k.id}')"><div class="body">
-            <div class="nm" style="font-size:17px;">${k.unique_name||"Unnamed"}</div>
-            <div class="code">${lineageCode(k)}</div>
-            <div class="meta"><span class="dot"></span>${k.status||""}</div>
-          </div></div>`).join("")}</div>` : `<div class="muted" style="font-size:13px;margin-top:8px;">No propagations yet.</div>`}
-      </div>
-    </div>
-    <div class="section-t">
-      <div class="label flank" style="justify-content:flex-start;">ASK LINNAEUS</div>
-      <div style="margin-top:10px;display:flex;gap:8px;">
+      <div class="label flank">Ask Linnaeus</div>
+      <div style="margin-top:10px;display:flex;gap:8px;max-width:560px;margin-left:auto;margin-right:auto;">
         <input id="ai-q" placeholder="What does this plant need right now?" style="flex:1;" />
         <button type="button" class="btn btn-sm btn-gold" onclick="askPlant()">✦ Ask</button>
       </div>
-      <div id="ai-ans" class="roomnote" style="display:none;margin-top:10px;white-space:pre-wrap;"></div>
+      <div id="ai-ans" class="roomnote" style="display:none;margin:10px auto 0;max-width:560px;white-space:pre-wrap;"></div>
     </div>
+
     <div class="section-t">
-      <div class="label flank" style="justify-content:flex-start;">CARE &amp; HEALTH</div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">
+      <div class="label flank">Photographs</div>
+      <div style="margin-top:10px;text-align:center;"><button type="button" class="btn btn-sm" onclick="addPhoto()">+ Add photo</button></div>
+      <div style="margin-top:12px;">${renderPhotoGrid(photos)}</div>
+    </div>
+
+    <div class="section-t">
+      <div class="label flank">Care &amp; Health</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;justify-content:center;">
         ${["Watered","Fed","Repotted","Pruned","Treated","Rotated","Moved"].map(a=>`<button type="button" class="btn btn-sm" onclick="logCare('${a}')">${a}</button>`).join("")}
       </div>
       <div id="care-list" style="margin-top:14px;">${renderCareItems(care)}</div>
-      <div style="margin-top:18px;"><button type="button" class="btn btn-sm" onclick="toggleConcern()">+ Log a concern</button></div>
-      <div id="concern-form" style="display:none;margin-top:12px;background:#15140f;border:1px solid var(--line);border-radius:3px;padding:14px;">
-        <div style="margin-bottom:10px;"><button type="button" class="btn btn-sm btn-gold" onclick="diagnoseConcern()">✦ Diagnose from photo</button></div>
+      <div style="margin-top:18px;text-align:center;"><button type="button" class="btn btn-sm" onclick="toggleConcern()">+ Log a concern</button></div>
+      <div id="concern-form" style="display:none;margin:12px auto 0;background:#15140f;border:1px solid var(--line);border-radius:3px;padding:14px;max-width:560px;">
+        <div style="margin-bottom:10px;text-align:center;"><button type="button" class="btn btn-sm btn-gold" onclick="diagnoseConcern()">✦ Diagnose from photo</button></div>
         <label class="field">Symptom<textarea id="h-symptom" rows="2" placeholder="e.g. yellowing lower leaves, webbing on new growth"></textarea></label>
         <div class="row2">
           <label class="field">Suspected cause<input id="h-cause" placeholder="e.g. overwatering, spider mites" /></label>
@@ -653,6 +654,21 @@ function renderPlant(p, mother, kids, care, photos, health){
         <button type="button" class="btn btn-primary btn-sm" onclick="saveConcern()">Save concern</button>
       </div>
       <div style="margin-top:14px;">${renderHealthItems(health)}</div>
+    </div>
+
+    ${p.notes?`<div class="section-t"><div class="label flank">Notes</div><p class="muted" style="margin:10px auto 0;text-align:center;max-width:54ch;">${p.notes}</p></div>`:""}
+
+    <div class="section-t">
+      <div class="label flank">Lineage — House of ${houseName}</div>
+      <div style="margin-top:12px;text-align:center;">
+        ${mother?`<div class="muted" style="font-size:13px;">Mother: <a href="#" onclick="openPlant('${mother.id}');return false;">${mother.unique_name||"Unnamed"}</a> (${lineageCode(mother)})</div>`:`<div class="muted" style="font-size:13px;">Founder of this House.</div>`}
+        ${kids.length? `<div style="margin-top:10px;" class="grid">${kids.map(k=>`
+          <div class="card" onclick="openPlant('${k.id}')"><div class="body">
+            <div class="nm" style="font-size:17px;">${k.unique_name||"Unnamed"}</div>
+            <div class="code">${lineageCode(k)}</div>
+            <div class="meta"><span class="dot"></span>${k.status||""}</div>
+          </div></div>`).join("")}</div>` : `<div class="muted" style="font-size:13px;margin-top:8px;">No propagations yet.</div>`}
+      </div>
     </div>`;
 }
 function kv(k,v){ return v? `<div class="k">${k}</div><div>${v}</div>` : ""; }
