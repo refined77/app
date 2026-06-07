@@ -121,6 +121,16 @@
   .tended .tg{color:var(--gold);}
   .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
   .chip{border:1px solid var(--line);border-radius:20px;padding:5px 12px;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--cream);}
+  .lrow{display:flex;align-items:center;gap:12px;padding:9px 11px;border:1px solid var(--line);border-radius:4px;margin-bottom:8px;cursor:pointer;background:linear-gradient(180deg,#1c1a16,#171511);transition:.15s;}
+  .lrow:hover{border-color:var(--gold);transform:translateY(-1px);box-shadow:0 6px 16px rgba(0,0,0,.3);}
+  .lrow .lthumb{width:54px;height:54px;border-radius:3px;background:#0d0d0d center/cover no-repeat;border:1px solid var(--line);flex:none;display:flex;align-items:center;justify-content:center;color:var(--sage);font-family:'Cormorant Garamond',serif;font-size:22px;}
+  .lrow .lmain{flex:1;min-width:0;}
+  .lrow .lnm{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:19px;color:var(--cream);line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .lrow .lsub{font-size:11px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:.03em;}
+  .lrow .lmeta{text-align:right;flex:none;font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);line-height:1.5;}
+  .lrow .lstatus{color:var(--gold);}
+  .lrow .lflag{color:var(--garnet-bright);}
+  .lrow .lval{color:var(--cream);}
   .chip.pick{cursor:pointer;transition:.15s;user-select:none;}
   .chip.pick:hover{border-color:var(--gold);}
   .chip.on{background:var(--garnet);border-color:var(--garnet);color:var(--cream);}
@@ -192,8 +202,25 @@
       <div><h2>The Collection</h2><div class="sub" id="coll-count">—</div></div>
       <button class="btn btn-sm" id="go-add">+ Add a Plant</button>
     </div>
-    <input type="text" id="coll-search" placeholder="Search by name, species, code…" style="margin-bottom:18px;" />
-    <div id="coll-grid" class="grid"></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+      <input type="text" id="coll-search" placeholder="Search name, species, code…" style="flex:1;min-width:150px;margin:0;" />
+      <select id="coll-filter" style="width:auto;margin:0;">
+        <option value="">All statuses</option>
+        <option>In Collection</option><option>Quarantine</option><option>Mother Plant</option>
+        <option>Propagating</option><option>Ready to Sell</option><option>Listed</option>
+        <option>Reserved</option><option>Sold</option><option>Gifted</option><option>Lost</option>
+        <option value="__needsid">Needs ID</option>
+      </select>
+      <select id="coll-sort" style="width:auto;margin:0;">
+        <option value="new">Newest first</option>
+        <option value="old">Oldest first</option>
+        <option value="name">Name A–Z</option>
+        <option value="status">Status</option>
+        <option value="zone">Zone / shelf</option>
+        <option value="value">Value high→low</option>
+      </select>
+    </div>
+    <div id="coll-grid"></div>
   </div>
 
   <!-- ADD -->

@@ -156,31 +156,51 @@ function tile(label,val,action){
 let collFilter = null;
 window.selectCollection = function(f){ collFilter = (f && f!=='all') ? f : null; go('collection'); };
 async function loadCollection(){
-  const plants = await fetchPlants();
-  const list = collFilter ? plants.filter(p=>p.status===collFilter) : plants;
-  $("coll-count").textContent = list.length+" specimen"+(list.length===1?"":"s")+(collFilter?` · ${collFilter}`:"");
+  await fetchPlants();
+  if(collFilter){ const f=$("coll-filter"); if(f) f.value=collFilter; collFilter=null; }
+  applyColl();
+}
+function sortPlants(arr, mode){
+  const a=arr.slice(), t=p=>p.date_entered?new Date(p.date_entered).getTime():0;
+  if(mode==='old') a.sort((x,y)=>t(x)-t(y)||(x.plant_no||0)-(y.plant_no||0));
+  else if(mode==='name') a.sort((x,y)=>(x.unique_name||x.common_name||'').localeCompare(y.unique_name||y.common_name||''));
+  else if(mode==='status') a.sort((x,y)=>(x.status||'').localeCompare(y.status||''));
+  else if(mode==='zone') a.sort((x,y)=>(x.location_zone||'').localeCompare(y.location_zone||''));
+  else if(mode==='value') a.sort((x,y)=>(Number(y.current_value)||0)-(Number(x.current_value)||0));
+  else a.sort((x,y)=>t(y)-t(x)||(y.plant_no||0)-(x.plant_no||0)); // newest
+  return a;
+}
+function applyColl(){
+  const q=($("coll-search").value||'').toLowerCase().trim();
+  const f=$("coll-filter")?$("coll-filter").value:'';
+  const sort=$("coll-sort")?$("coll-sort").value:'new';
+  let list=CACHE.slice();
+  if(f==='__needsid') list=list.filter(p=>p.needs_id_review);
+  else if(f) list=list.filter(p=>p.status===f);
+  if(q) list=list.filter(p=>[p.unique_name,p.botanical_name,p.common_name,p.house,p.location_zone,lineageCode(p)].filter(Boolean).join(' ').toLowerCase().includes(q));
+  list=sortPlants(list, sort);
+  const label = f==='__needsid' ? ' · needs ID' : (f?` · ${f}`:'');
+  $("coll-count").textContent = list.length+" specimen"+(list.length===1?'':'s')+label;
   renderColl(list);
 }
-$("coll-search").oninput = (e)=>{
-  const q=e.target.value.toLowerCase();
-  const base = collFilter ? CACHE.filter(p=>p.status===collFilter) : CACHE;
-  renderColl(base.filter(p=>[p.unique_name,p.botanical_name,p.common_name,p.house,lineageCode(p)]
-    .filter(Boolean).join(" ").toLowerCase().includes(q)));
-};
+$("coll-search").oninput = applyColl;
+if($("coll-filter")) $("coll-filter").onchange = applyColl;
+if($("coll-sort")) $("coll-sort").onchange = applyColl;
 function renderColl(plants){
   const g=$("coll-grid");
-  if(!plants.length){ g.innerHTML=`<div class="empty" style="grid-column:1/-1;">
-    <div class="big">No specimens yet.</div>
-    <div>Tap “Add a Plant” to begin the collection.</div></div>`; return; }
-  g.innerHTML = plants.map(p=>`
-    <div class="card" onclick="openPlant('${p.id}')">
-      <div class="thumb" style="${p.cover_photo_url?`background-image:url('${p.cover_photo_url}')`:''}">${p.cover_photo_url?'':'❦'}</div>
-      <div class="body">
-        <div class="nm">${p.unique_name||p.common_name||"Unnamed"}</div>
-        <div class="code">${lineageCode(p)}</div>
-        <div class="meta"><span class="dot"></span>${p.status||""}</div>
-      </div>
-    </div>`).join("");
+  if(!plants.length){ g.innerHTML=`<div class="empty"><div class="big">No specimens.</div><div>Adjust the filters, or tap “Add a Plant.”</div></div>`; return; }
+  g.innerHTML = plants.map(function(p){
+    const sub=[p.botanical_name||p.common_name, p.location_zone].filter(Boolean).join(' · ');
+    const val=(isAdmin() && p.current_value!=null)? money(p.current_value):'';
+    return '<div class="lrow" onclick="openPlant(\''+p.id+'\')">'
+      +'<div class="lthumb" style="'+(p.cover_photo_url?("background-image:url('"+p.cover_photo_url+"')"):'')+'">'+(p.cover_photo_url?'':'❦')+'</div>'
+      +'<div class="lmain"><div class="lnm">'+(p.unique_name||p.common_name||'Unnamed')+'</div>'
+      +'<div class="lsub">'+lineageCode(p)+(sub?' · '+sub:'')+'</div></div>'
+      +'<div class="lmeta"><div class="lstatus">'+(p.status||'')+'</div>'
+      +(p.needs_id_review?'<div class="lflag">needs ID</div>':'')
+      +(val?'<div class="lval">'+val+'</div>':'')
+      +'</div></div>';
+  }).join("");
 }
 
 /* ---------- ADD ---------- */
