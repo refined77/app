@@ -1,9 +1,0 @@
-# Botanical Reverie Operations App — Netlify config
-# Static site served from the repo root; serverless functions in netlify/functions.
-
-[build]
-  publish = "."
-
-[functions]
-  directory = "netlify/functions"
-  node_bundler = "esbuild"

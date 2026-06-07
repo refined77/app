@@ -684,7 +684,7 @@ async function askLinnaeus(payload){
   const tok=await aiToken();
   if(!tok) return {error:"Sign in to use Linnaeus."};
   try{
-    const r=await fetch("/.netlify/functions/linnaeus",{method:"POST",
+    const r=await fetch("/api/linnaeus",{method:"POST",
       headers:{"content-type":"application/json","authorization":"Bearer "+tok},
       body:JSON.stringify(payload)});
     const j=await r.json().catch(()=>null);
