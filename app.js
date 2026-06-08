@@ -68,7 +68,7 @@ sb.auth.onAuthStateChange((_e, session)=>{ session? showApp(session.user) : show
 sb.auth.getSession().then(({data})=>{ data.session? showApp(data.session.user) : showAuth(); });
 
 /* ---------- navigation ---------- */
-const views = ["today","collection","add","plant","supplies","admin"];
+const views = ["today","collection","add","plant","supplies","admin","quick"];
 function go(name){
   views.forEach(v=> $("v-"+v).classList.toggle("hidden", v!==name));
   document.querySelectorAll(".nav button").forEach(b=> b.classList.toggle("active", b.dataset.go===name));
@@ -77,6 +77,7 @@ function go(name){
   if(name==="add"){ setupAddForm(); }
   if(name==="supplies") loadSupplies();
   if(name==="admin") loadAdmin();
+  if(name==="quick") loadQuick();
 }
 function setupAdminNav(){ const b=$("nav-admin"); if(b) b.style.display = isAdmin()? "" : "none"; }
 document.querySelectorAll(".nav button").forEach(b=> b.onclick=()=>{ if(b.dataset.go==='collection') collFilter=null; go(b.dataset.go); });
@@ -900,6 +901,153 @@ window.renderReport=async function(day){
    +sect('Concerns flagged', health.map(h=>row(h.plant_id, `⚠ ${h.symptom||'Concern'} — ${h.plant?h.plant.unique_name||'a plant':'a plant'}`, '')))
    +sect('New vendors', vendors.map(v=>row(null, v, 'new')))
    +sect('Needs ID (open)', needsId.map(p=>row(p.id, nm(p), (p.botanical_name||'no species')+' · fix')));
+};
+
+/* ---------- QUICK BENCH ADD (rapid: snap → name → save → next) ---------- */
+const NAMES = ["Seraphine","Genevieve","Ophelia","Beatrix","Vivienne","Cordelia","Persephone","Delphine","Marguerite","Isadora","Hesper","Cleo","Augustine","Rosalind","Imogen","Celeste","Aurelia","Lucia","Sabine","Theodora","Wilhelmina","Eloise","Florence","Clementine","Honora","Lavinia","Octavia","Philippa","Rosamund","Tabitha","Winifred","Anneliese","Cosima","Maren","Verena","Sylvie","Colette","Josephine","Mireille","Ottoline",
+"Hazel","Juniper","Ivy","Magnolia","Camellia","Dahlia","Briar","Laurel","Wren","Saffron","Sienna","Opal","Pearl","Maris","Fern","Linden","Rowan","Marigold","Iris","Flora",
+"Lady in Garnet","Garnet Vespers","Carmine","Bordeaux","Cinder Rose","Velvet Garnet","Last Ember","Ember","The Oxblood Hour","The Red Hour",
+"Evenfall","Vesper","Duskbloom","Gilded Hour","Emberglow","Hushed Gold","Lantern","Nightfall","Goldenhour","Twilight Vesper","The Quiet Glow",
+"Chiaroscuro","Patina","Still Life","Verdigris","Old Master","Reverie","The Gilded Frame","Candle & Leaf","The Dutch Hour",
+"Fenestra","Foliata","Velour","Seraph Wing","The Velvet Vein","The Cathedral Leaf"];
+const QSTATUS = ["In Collection","Quarantine","Mother Plant","Propagating","Ready to Sell","Listed"];
+let qPhoto=null, qIdentify=null, qCount=0, qWired=false;
+
+function usedNames(){ const s=new Set(); (CACHE||[]).forEach(p=>{ if(p.unique_name) s.add(p.unique_name.toLowerCase()); }); return s; }
+function suggestQuickName(){
+  const used=usedNames();
+  const pool=NAMES.filter(n=>!used.has(n.toLowerCase()));
+  const src=pool.length?pool:NAMES;
+  const pick=src[Math.floor(((qCount*7+ (src.length))%src.length))] || src[0];
+  // rotate deterministically-ish without Math.random (blocked): walk by a shifting index
+  let i=(qCount*13+ (Date.now? 0:0)) % src.length;  // qCount-based shuffle
+  const inp=$("q-name"); if(inp) inp.value = src[i] || pick;
+}
+function fillSpeciesSelect(id){
+  const s=$(id); if(!s) return;
+  s.innerHTML = '<option value="">— Linnaeus will fill, or pick —</option>' + SPECIES.map(x=>`<option value="${escAttr(x.botanical_name)}">${x.botanical_name}</option>`).join('');
+}
+function qEnsureSpecies(bot){ const s=$("q-botanical"); if(!s||!bot) return; if(![...s.options].some(o=>o.value===bot)) s.add(new Option(bot,bot)); s.value=bot; }
+async function loadQuick(){
+  const b=$("quick-body"); if(!b) return;
+  await loadCatalog();
+  const plants = CACHE.length? CACHE : await fetchPlants();
+  b.innerHTML = `
+    <div id="q-photo-zone" style="border:1px dashed var(--line);border-radius:4px;min-height:150px;display:flex;align-items:center;justify-content:center;cursor:pointer;background:#0d0d0d;overflow:hidden;margin:6px 0 10px;text-align:center;">
+      <div id="q-photo-prompt" style="color:var(--muted);font-size:13px;padding:30px;line-height:1.6;">＋ Tap to snap the plant<br><span style="font-size:11px;">Linnaeus names it for you</span></div>
+      <img id="q-photo-preview" alt="" style="display:none;width:100%;max-height:300px;object-fit:cover;" />
+    </div>
+    <input type="file" id="q-photo-input" accept="image/*" capture="environment" style="display:none;" />
+    <div id="q-id" class="fnote" style="display:none;margin-bottom:10px;"></div>
+    <label class="field">Species<select id="q-botanical"></select></label>
+    <div class="row2">
+      <label class="field">Name<input id="q-name" placeholder="pet name" /></label>
+      <label class="field">Status<select id="q-status">${QSTATUS.map(s=>`<option>${s}</option>`).join('')}</select></label>
+    </div>
+    <div style="margin:-6px 0 12px;"><a id="q-shuffle" class="fnote" style="cursor:pointer;color:var(--gold);border-bottom:1px solid var(--line);">🎲 another name</a></div>
+    <div class="row2">
+      <label class="field">Shelf / zone<select id="q-zone"></select></label>
+      <label class="field" id="q-shelf-wrap" style="display:none;">Shelf<select id="q-shelf"></select></label>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center;margin-top:6px;">
+      <button type="button" class="btn btn-primary" onclick="saveQuick()">Save &amp; next ›</button>
+      <span class="muted" id="q-count" style="font-size:13px;">Added this session: ${qCount}</span>
+    </div>
+    <div id="q-msg" class="auth-msg muted" style="margin-top:8px;"></div>
+    <div style="margin-top:16px;"><a class="fnote" onclick="go('add')" style="cursor:pointer;">‹ Switch to the full Add form</a></div>`;
+  fillSpeciesSelect("q-botanical");
+  fillSelect("q-zone", ZONES, "— Select a zone —");
+  fillSelect("q-shelf", SHELVES, "— Select a shelf —");
+  qPhoto=null; qIdentify=null;
+  suggestQuickName();
+  if(!qWired){ wireQuick(); qWired=true; }
+}
+function wireQuick(){
+  $("q-photo-zone").addEventListener("click", ()=> $("q-photo-input").click());
+  $("q-photo-input").addEventListener("change", async e=>{
+    const f=e.target.files&&e.target.files[0]; if(!f) return;
+    const q=await checkPhotoQuality(f);
+    if(!q.ok){ toast("Photo bounced — "+q.issues.join("; ")); return; }
+    qPhoto=f; const img=$("q-photo-preview"), pr=$("q-photo-prompt");
+    img.src=URL.createObjectURL(f); img.style.display="block"; pr.style.display="none";
+    runQuickIdentify(f);
+  });
+  $("q-id").addEventListener("click", async e=>{
+    const c=e.target.closest(".chip"); if(!c) return;
+    await qAccept(c.dataset.bot, c.dataset.com);
+  });
+  $("q-shuffle").addEventListener("click", ()=>{ qCount++; suggestQuickName(); qCount--; });
+  $("q-zone").addEventListener("change", ()=>{ $("q-shelf-wrap").style.display = /^Rack/.test($("q-zone").value)?"block":"none"; });
+  $("q-status").addEventListener("change", ()=>{ if($("q-status").value==="Quarantine"){} });
+}
+async function runQuickIdentify(file){
+  const box=$("q-id"); box.style.display="block"; box.className="fnote"; box.textContent="✦ Linnaeus is identifying…";
+  const img=await fileToB64(file); if(!img){ box.style.display="none"; return; }
+  const v=await askLinnaeus({mode:"identify", image_b64:img.b64, media_type:img.media});
+  if(!v||v.error||!v.result||!Array.isArray(v.result.candidates)||!v.result.candidates.length){
+    qIdentify=null; box.className="fnote"; box.innerHTML=(v&&v.error)?("Linnaeus: "+v.error):"Couldn’t ID — pick the species, or just Save (it'll land in Needs-ID).";
+    return;
+  }
+  qIdentify=v.result;
+  box.className="fnote";
+  box.innerHTML='<div class="label" style="margin-bottom:6px;">✦ Tap the match</div><div class="chips">'+v.result.candidates.map(c=>`<span class="chip pick" data-bot="${escAttr(c.botanical||'')}" data-com="${escAttr(c.common||'')}">${c.botanical||'?'}${c.common?` — ${c.common}`:''}${c.confidence?` · ${c.confidence}`:''}</span>`).join('')+'</div>';
+  // auto-select the top candidate so a quick Save just works
+  const top=v.result.candidates[0]; if(top) await qAccept(top.botanical, top.common);
+}
+async function qAccept(bot, com){
+  if(!bot) return;
+  if(!SPECIES.some(s=>(s.botanical_name||'').toLowerCase()===bot.toLowerCase())){
+    try{ const {data}=await sb.from("species").insert({botanical_name:bot, common_name:com||null}).select().single(); if(data) SPECIES.push(data); fillSpeciesSelect("q-botanical"); }catch(e){}
+  }
+  qEnsureSpecies(bot);
+}
+window.saveQuick=async function(){
+  const m=$("q-msg"); m.style.color=""; m.textContent="";
+  const name=($("q-name").value||"").trim();
+  const bot=$("q-botanical").value;
+  const zone=$("q-zone").value;
+  if(!qPhoto){ m.style.color="var(--garnet-bright)"; m.textContent="Snap a photo first."; return; }
+  if(!name){ m.style.color="var(--garnet-bright)"; m.textContent="Give it a name (tap 🎲 for one)."; return; }
+  if(!zone){ m.style.color="var(--garnet-bright)"; m.textContent="Pick a shelf/zone."; return; }
+  if(/^Rack/.test(zone) && !$("q-shelf").value){ m.style.color="var(--garnet-bright)"; m.textContent="Pick the shelf."; return; }
+  m.textContent="Saving…";
+  let loc = /^Rack/.test(zone) ? zone+" · "+$("q-shelf").value : zone;
+  const sp = SPECIES.find(s=>s.botanical_name===bot);
+  const rec={
+    unique_name:name, status:$("q-status").value,
+    botanical_name: bot||null, common_name: sp?sp.common_name:null,
+    location_zone: loc, date_entered: new Date().toISOString().slice(0,10),
+  };
+  const {data,error}=await sb.from("plant").insert(rec).select().single();
+  if(error){ m.style.color="var(--garnet-bright)"; m.textContent=error.message; return; }
+  // upload photo + cover
+  try{
+    const ext=(qPhoto.name.split(".").pop()||"jpg").toLowerCase().replace(/[^a-z0-9]/g,"")||"jpg";
+    const path=data.id+"/"+Date.now()+"."+ext;
+    const up=await sb.storage.from("plant-photos").upload(path, qPhoto, {upsert:false, contentType:qPhoto.type||"image/jpeg"});
+    if(!up.error){ const url=sb.storage.from("plant-photos").getPublicUrl(path).data.publicUrl;
+      await sb.from("photo").insert({plant_id:data.id, image_url:url});
+      await sb.from("plant").update({cover_photo_url:url}).eq("id",data.id); }
+  }catch(e){}
+  // needs-ID flag (no match / no AI → review)
+  try{
+    let flag=true;
+    if(qIdentify && Array.isArray(qIdentify.candidates)){
+      const names=qIdentify.candidates.map(c=>(c.botanical||'').toLowerCase());
+      flag = names.indexOf((bot||'').toLowerCase())<0;
+    }
+    if(!bot) flag=true;
+    await sb.from("plant").update({needs_id_review:flag, ai_suggestion:qIdentify||null}).eq("id",data.id);
+  }catch(e){}
+  await fetchPlants();
+  qCount++; qIdentify=null; qPhoto=null;
+  // reset photo + species + name; KEEP zone/shelf/status so you fly down a shelf
+  $("q-photo-preview").style.display="none"; $("q-photo-prompt").style.display="block";
+  $("q-id").style.display="none"; $("q-id").innerHTML="";
+  $("q-botanical").value="";
+  suggestQuickName();
+  $("q-count").textContent="Added this session: "+qCount;
+  m.style.color="var(--gold)"; m.textContent="Saved “"+name+"”. Snap the next.";
 };
 
 /* ---------- PWA service worker (registers on https) ---------- */

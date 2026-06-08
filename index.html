@@ -240,7 +240,7 @@
 
   <!-- ADD -->
   <div id="v-add" class="view hidden">
-    <div class="view-head"><h2>Add a Plant</h2><div class="sub">A new specimen enters the collection.</div></div>
+    <div class="view-head" style="display:flex;justify-content:space-between;align-items:flex-end;gap:10px;"><div><h2>Add a Plant</h2><div class="sub">A new specimen enters the collection.</div></div><button type="button" class="btn btn-sm btn-gold" onclick="go('quick')">⚡ Quick add</button></div>
     <form id="add-form" autocomplete="off">
       <!-- PHOTO — required, photo-first -->
       <div class="label" style="margin-bottom:8px;">Photo — required</div>
@@ -448,6 +448,12 @@
   <div id="v-admin" class="view hidden">
     <div class="view-head"><h2>Admin</h2><div class="sub">People, access &amp; the daily report.</div></div>
     <div id="admin-body"></div>
+  </div>
+
+  <!-- QUICK BENCH ADD -->
+  <div id="v-quick" class="view hidden">
+    <div class="view-head"><h2>Quick bench add</h2><div class="sub">Snap → name → save → next. Fly down a shelf.</div></div>
+    <div id="quick-body"></div>
   </div></section>
 
 <!-- NAV -->
