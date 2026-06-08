@@ -53,6 +53,30 @@
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
   @media(max-width:560px){.row2{grid-template-columns:1fr;}}
 
+  /* ---- Linnaeus chat ---- */
+  #chat-log{padding-bottom:104px;}
+  .cmsg{max-width:86%;padding:10px 14px;border-radius:13px;margin:9px 0;font-size:14px;line-height:1.55;white-space:pre-wrap;word-wrap:break-word;}
+  .cmsg.user{margin-left:auto;background:var(--garnet);color:var(--cream);border-bottom-right-radius:3px;}
+  .cmsg.bot{margin-right:auto;background:#1c1a16;border:1px solid var(--line);color:var(--cream);border-bottom-left-radius:3px;}
+  .cmsg.bot i,.cmsg.bot em{font-family:'Cormorant Garamond',serif;font-style:italic;color:var(--eucalyptus);}
+  .cmsg.bot b{color:var(--champagne);font-weight:600;}
+  #chat-inputbar{position:fixed;left:0;right:0;bottom:0;z-index:50;padding:10px 0 16px;
+    background:linear-gradient(180deg,rgba(17,17,17,0),var(--noir) 30%);}
+  .chat-inwrap{max-width:1000px;margin:0 auto;display:flex;gap:8px;padding:0 18px;align-items:center;}
+  #chat-input{flex:1;margin:0;}
+  #chat-send{flex:none;white-space:nowrap;}
+
+  /* ---- Floating sparkle chat button ---- */
+  #chat-fab{position:fixed;right:18px;bottom:96px;z-index:60;display:flex;align-items:center;gap:8px;
+    background:var(--garnet);color:var(--cream);border:1px solid var(--gold);
+    padding:12px 18px;border-radius:30px;cursor:pointer;font-family:'Jost',sans-serif;
+    font-size:12px;letter-spacing:.14em;text-transform:uppercase;
+    box-shadow:0 6px 22px rgba(0,0,0,.5);transition:.18s;}
+  #chat-fab:hover{background:var(--garnet-bright);transform:translateY(-2px);}
+  #chat-fab .spark{color:var(--champagne);font-size:16px;line-height:1;animation:twinkle 2.6s ease-in-out infinite;}
+  @keyframes twinkle{0%,100%{opacity:1;transform:scale(1);}50%{opacity:.5;transform:scale(1.3);}}
+  @media(max-width:560px){ #chat-fab .lbl{display:none;} #chat-fab{padding:15px;border-radius:50%;bottom:90px;} }
+
   /* AUTH */
   #auth-view{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
   .auth-card{width:100%;max-width:380px;text-align:center;}
@@ -456,6 +480,24 @@
     <div class="view-head"><h2>Quick bench add</h2><div class="sub">Snap → name → save → next. Fly down a shelf.</div></div>
     <div id="quick-body"></div>
   </div></section>
+
+<!-- LINNAEUS CHAT -->
+<div id="v-chat" class="view hidden">
+  <div class="view-head" style="display:flex;justify-content:space-between;align-items:center;">
+    <div><h2 style="display:flex;align-items:center;gap:9px;"><span style="color:var(--gold);font-size:.8em;">&#10022;</span>Linnaeus</h2><div class="sub">Your in-house botanist — ask anything.</div></div>
+    <button class="btn btn-sm" onclick="go('today')">&times; Close</button>
+  </div>
+  <div id="chat-log"></div>
+  <div id="chat-inputbar">
+    <div class="chat-inwrap">
+      <input id="chat-input" type="text" placeholder="Ask Linnaeus&hellip;" autocomplete="off" />
+      <button id="chat-send" class="btn btn-gold btn-sm">Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- FLOATING CHAT BUTTON -->
+<button id="chat-fab" class="hidden" onclick="go('chat')" title="Ask Linnaeus"><span class="spark">&#10022;</span><span class="lbl">Ask Linnaeus</span></button>
 
 <!-- NAV -->
 <nav class="nav hidden" id="nav">

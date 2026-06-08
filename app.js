@@ -27,7 +27,7 @@ function lineageCode(p){
 function money(n){ return (n==null||n==="")?"—":"$"+Number(n).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:2}); }
 
 /* ---------- auth ---------- */
-function showAuth(){ el.auth.classList.remove("hidden"); el.app.classList.add("hidden"); el.nav.classList.add("hidden"); }
+function showAuth(){ el.auth.classList.remove("hidden"); el.app.classList.add("hidden"); el.nav.classList.add("hidden"); var f=$("chat-fab"); if(f) f.classList.add("hidden"); }
 function showApp(user){
   el.auth.classList.add("hidden"); el.app.classList.remove("hidden"); el.nav.classList.remove("hidden");
   const meta = user.user_metadata || {};
@@ -68,7 +68,7 @@ sb.auth.onAuthStateChange((_e, session)=>{ session? showApp(session.user) : show
 sb.auth.getSession().then(({data})=>{ data.session? showApp(data.session.user) : showAuth(); });
 
 /* ---------- navigation ---------- */
-const views = ["today","collection","add","plant","supplies","admin","quick"];
+const views = ["today","collection","add","plant","supplies","admin","quick","chat"];
 function go(name){
   views.forEach(v=> $("v-"+v).classList.toggle("hidden", v!==name));
   document.querySelectorAll(".nav button").forEach(b=> b.classList.toggle("active", b.dataset.go===name));
@@ -78,6 +78,9 @@ function go(name){
   if(name==="supplies") loadSupplies();
   if(name==="admin") loadAdmin();
   if(name==="quick") loadQuick();
+  if(name==="chat") loadChat();
+  var _fab=$("chat-fab"); if(_fab) _fab.classList.toggle("hidden", name==="chat");
+  if(el&&el.nav) el.nav.style.display = (name==="chat") ? "none" : "";
   window.scrollTo(0,0);
 }
 function setupAdminNav(){ const b=$("nav-admin"); if(b) b.style.display = isAdmin()? "" : "none"; }
@@ -701,6 +704,40 @@ async function askLinnaeus(payload){
     return j;
   }catch(e){ return {error:"Couldn't reach Linnaeus (is the app deployed?)."}; }
 }
+/* ----- Linnaeus chat (floating sparkle button → in-app conversation) ----- */
+let CHAT=[]; let chatWired=false;
+function chatEscape(t){ return String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function chatMd(t){ let s=chatEscape(t);
+  s=s.replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>");
+  s=s.replace(/(^|[^*])\*([^*\n]+)\*/g,"$1<i>$2</i>");
+  return s.replace(/\n/g,"<br>"); }
+function chatBubble(role,text){ const log=$("chat-log"); const d=document.createElement("div");
+  d.className="cmsg "+(role==="user"?"user":"bot"); d.innerHTML=chatMd(text); log.appendChild(d);
+  window.scrollTo(0,document.body.scrollHeight); return d; }
+function chatGreeting(){ $("chat-log").innerHTML='<div class="cmsg bot">Hello, Michi. I’m Linnaeus — your botanist on call. Ask me about any specimen, the grow room, quarantine, the soil mixes, even brand voice. What do you need?</div>'; }
+function loadChat(){
+  if(!chatWired){ chatWired=true;
+    $("chat-send").onclick=sendChat;
+    $("chat-input").addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); sendChat(); } });
+  }
+  if(!CHAT.length) chatGreeting();
+  setTimeout(function(){ var i=$("chat-input"); if(i) i.focus(); },60);
+}
+async function sendChat(){
+  const input=$("chat-input"); const text=(input.value||"").trim(); if(!text) return;
+  input.value="";
+  if(!CHAT.length) $("chat-log").innerHTML="";
+  CHAT.push({role:"user",content:text}); chatBubble("user",text);
+  const thinking=chatBubble("bot","Linnaeus is thinking…"); thinking.style.opacity=".6";
+  $("chat-send").disabled=true;
+  const res=await askLinnaeus({mode:"chat", messages:CHAT.slice(-24)});
+  $("chat-send").disabled=false; if(thinking&&thinking.remove) thinking.remove();
+  if(res && res.text){ CHAT.push({role:"assistant",content:res.text}); chatBubble("bot",res.text); }
+  else { chatBubble("bot",(res&&res.error)?res.error:"Something went wrong — try again."); }
+  var i2=$("chat-input"); if(i2) i2.focus();
+}
+window.sendChat=sendChat;
+
 function plantCtx(p){ p=p||{}; return {unique_name:p.unique_name,botanical_name:p.botanical_name,common_name:p.common_name,cultivar:p.cultivar,location_zone:p.location_zone,status:p.status,condition_at_intake:p.condition_at_intake,date_entered:p.date_entered}; }
 async function linnaeusVerify(botanical, common, file){
   if(!file) return null;
