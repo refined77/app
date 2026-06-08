@@ -78,6 +78,7 @@ function go(name){
   if(name==="supplies") loadSupplies();
   if(name==="admin") loadAdmin();
   if(name==="quick") loadQuick();
+  window.scrollTo(0,0);
 }
 function setupAdminNav(){ const b=$("nav-admin"); if(b) b.style.display = isAdmin()? "" : "none"; }
 document.querySelectorAll(".nav button").forEach(b=> b.onclick=()=>{ if(b.dataset.go==='collection') collFilter=null; go(b.dataset.go); });
@@ -1264,27 +1265,28 @@ function renderSupplyReorder(list){
 function renderSupplies(list){
   const box = $("sup-list");
   if(!list.length){ box.innerHTML = `<div class="empty"><div class="big">No supplies yet.</div><div>Tap &ldquo;Add supply&rdquo; to start your inventory.</div></div>`; return; }
-  box.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:4px;">
-    <thead><tr>
-      <th style="text-align:left;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);padding:6px 6px;border-bottom:1px solid var(--line);font-weight:400;">Item</th>
-      <th style="text-align:left;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);padding:6px 6px;border-bottom:1px solid var(--line);font-weight:400;">On hand</th>
-      <th style="text-align:left;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);padding:6px 6px;border-bottom:1px solid var(--line);font-weight:400;">Uses left</th>
-      <th style="border-bottom:1px solid var(--line);"></th>
-    </tr></thead><tbody>
-    ${list.map(s=>{
-      const ul = usesLeft(s);
-      const low = needsReorder(s);
-      return `<tr>
-        <td style="padding:9px 6px;border-bottom:1px solid var(--line);"><span style="color:var(--cream);">${s.name||"Item"}</span><br><span style="font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--sage);">${s.category||""}</span></td>
-        <td style="padding:9px 6px;border-bottom:1px solid var(--line);">${s.quantity_on_hand!=null?s.quantity_on_hand:"—"} ${s.unit||""}</td>
-        <td style="padding:9px 6px;border-bottom:1px solid var(--line);color:${low?'var(--garnet-bright)':'var(--fern)'};">${ul!=null?("≈ "+ul):"—"}</td>
-        <td style="padding:9px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap;">
-          <button type="button" class="btn btn-sm" style="padding:5px 10px;font-size:10px;" onclick="logUse('${s.id}')">Use</button> <button type="button" class="btn btn-sm" style="padding:5px 10px;font-size:10px;" onclick="editSupply('${s.id}')">Edit</button> <button type="button" class="btn btn-sm" style="padding:5px 10px;font-size:10px;border-color:var(--garnet);color:var(--garnet-bright);" onclick="deleteSupply('${s.id}')">&times;</button>
-          ${low?'<span style="display:inline-block;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:10px;border:1px solid var(--garnet);color:var(--garnet-bright);margin-left:6px;">Reorder</span>':''}
-        </td>
-      </tr>`;
-    }).join("")}
-    </tbody></table>`;
+  box.innerHTML = list.map(s=>{
+    const ul = usesLeft(s);
+    const low = needsReorder(s);
+    return `<div style="background:#15140f;border:1px solid var(--line);border-radius:5px;padding:12px 14px;margin-bottom:9px;${low?'border-color:var(--garnet);':''}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
+        <div style="min-width:0;flex:1;">
+          <div style="color:var(--cream);font-size:14.5px;line-height:1.25;">${s.name||"Item"}</div>
+          <div style="font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--sage);margin-top:3px;">${s.category||""}</div>
+        </div>
+        ${low?'<span style="flex:none;font-size:9px;letter-spacing:.08em;text-transform:uppercase;padding:3px 9px;border-radius:10px;border:1px solid var(--garnet);color:var(--garnet-bright);">Reorder</span>':''}
+      </div>
+      <div style="display:flex;gap:18px;margin-top:8px;font-size:12.5px;flex-wrap:wrap;">
+        <span class="muted">On hand: <span style="color:var(--cream);">${s.quantity_on_hand!=null?s.quantity_on_hand:"—"} ${s.unit||""}</span></span>
+        <span class="muted">Uses left: <span style="color:${low?'var(--garnet-bright)':'var(--fern)'};">${ul!=null?("≈ "+ul):"—"}</span></span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:11px;flex-wrap:wrap;">
+        <button type="button" class="btn btn-sm" style="padding:6px 14px;font-size:10px;" onclick="logUse('${s.id}')">Use</button>
+        <button type="button" class="btn btn-sm" style="padding:6px 14px;font-size:10px;" onclick="editSupply('${s.id}')">Edit</button>
+        <button type="button" class="btn btn-sm" style="padding:6px 12px;font-size:10px;border-color:var(--garnet);color:var(--garnet-bright);" onclick="deleteSupply('${s.id}')">Delete</button>
+      </div>
+    </div>`;
+  }).join("");
 }
 window.logUse = async function(id){
   const s = SUPPLIES_CACHE.find(x=>x.id===id);
