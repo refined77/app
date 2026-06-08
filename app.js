@@ -723,9 +723,8 @@ function loadChat(){
   if(!chatWired){ chatWired=true;
     $("chat-send").onclick=sendChat;
     $("chat-input").addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); sendChat(); } });
-    var cam=$("chat-cam"), file=$("chat-file");
-    if(cam&&file){ cam.onclick=function(){ file.click(); };
-      file.onchange=async function(){ const f=this.files&&this.files[0]; this.value=""; if(!f) return;
+    var file=$("chat-file");
+    if(file){ file.onchange=async function(){ const f=this.files&&this.files[0]; this.value=""; if(!f) return;
         const img=await fileToB64(f); if(!img){ return; }
         chatImg={b64:img.b64,media:img.media,url:"data:"+img.media+";base64,"+img.b64}; showAttachPreview(); }; }
   }
