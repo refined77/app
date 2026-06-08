@@ -100,8 +100,14 @@ export async function onRequestPost(context) {
   if (mode === "chat") {
     const incoming = Array.isArray(body.messages) ? body.messages : [];
     const messages = incoming
-      .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
-      .map((m) => ({ role: m.role, content: m.content.slice(0, 8000) }))
+      .filter((m) => m && (m.role === "user" || m.role === "assistant") && m.content != null)
+      .map((m) => {
+        if (Array.isArray(m.content)) {
+          const blocks = m.content.filter((b) => b && (b.type === "text" || b.type === "image"));
+          return { role: m.role, content: blocks.length ? blocks : [{ type: "text", text: "" }] };
+        }
+        return { role: m.role, content: String(m.content).slice(0, 8000) };
+      })
       .slice(-24);
     if (!messages.length) return json({ error: "No message." }, 400);
     let up;

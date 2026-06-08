@@ -119,7 +119,7 @@ async function loadToday(){
     .sort((a,b)=> (b.days===null?99999:b.days)-(a.days===null?99999:a.days));
   window.__todaySummary = `Collection ${total} plants; quarantine ${quarantine}; ready to sell ${ready}; mother plants ${mothers}. Needs check/water (${needs.length}): ` + (needs.slice(0,10).map(x=>`${x.p.unique_name||x.p.common_name||'Unnamed'} (${x.days===null?'no water logged':x.days+'d since water'})`).join('; ')||'none') + '.';
   $("today-body").innerHTML = `
-    <div class="grid" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr));">
+    <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr));">
       ${tile("In the collection", total, 'all')}
       ${tile("Collection value", money(value), 'all')}
       ${tile("In quarantine", quarantine, 'Quarantine')}
@@ -704,33 +704,49 @@ async function askLinnaeus(payload){
     return j;
   }catch(e){ return {error:"Couldn't reach Linnaeus (is the app deployed?)."}; }
 }
-/* ----- Linnaeus chat (floating sparkle button → in-app conversation) ----- */
-let CHAT=[]; let chatWired=false;
+/* ----- Linnaeus chat (floating sparkle button → in-app conversation, with photos) ----- */
+let CHAT=[]; let chatWired=false; let chatImg=null;
 function chatEscape(t){ return String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 function chatMd(t){ let s=chatEscape(t);
   s=s.replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>");
   s=s.replace(/(^|[^*])\*([^*\n]+)\*/g,"$1<i>$2</i>");
   return s.replace(/\n/g,"<br>"); }
+function chatScroll(){ const log=$("chat-log"); if(log) log.scrollTop=log.scrollHeight; }
 function chatBubble(role,text){ const log=$("chat-log"); const d=document.createElement("div");
-  d.className="cmsg "+(role==="user"?"user":"bot"); d.innerHTML=chatMd(text); log.appendChild(d);
-  window.scrollTo(0,document.body.scrollHeight); return d; }
-function chatGreeting(){ $("chat-log").innerHTML='<div class="cmsg bot">Hello, Michi. I’m Linnaeus — your botanist on call. Ask me about any specimen, the grow room, quarantine, the soil mixes, even brand voice. What do you need?</div>'; }
+  d.className="cmsg "+(role==="user"?"user":"bot"); d.innerHTML=text?chatMd(text):""; log.appendChild(d); chatScroll(); return d; }
+function chatGreeting(){ $("chat-log").innerHTML='<div class="cmsg bot">Hello, Michi. I’m Linnaeus — your botanist on call. Ask me about any specimen, the grow room, quarantine, the soil mixes, even brand voice. Tap the camera to show me a photo. What do you need?</div>'; }
+function showAttachPreview(){ const p=$("chat-attach-preview"); if(!p) return;
+  if(!chatImg){ p.classList.add("hidden"); p.innerHTML=""; return; }
+  p.classList.remove("hidden"); p.innerHTML='<img src="'+chatImg.url+'" alt=""><span class="x" onclick="clearChatImg()">Remove photo &times;</span>'; }
+window.clearChatImg=function(){ chatImg=null; showAttachPreview(); };
 function loadChat(){
   if(!chatWired){ chatWired=true;
     $("chat-send").onclick=sendChat;
     $("chat-input").addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); sendChat(); } });
+    var cam=$("chat-cam"), file=$("chat-file");
+    if(cam&&file){ cam.onclick=function(){ file.click(); };
+      file.onchange=async function(){ const f=this.files&&this.files[0]; this.value=""; if(!f) return;
+        const img=await fileToB64(f); if(!img){ return; }
+        chatImg={b64:img.b64,media:img.media,url:"data:"+img.media+";base64,"+img.b64}; showAttachPreview(); }; }
   }
   if(!CHAT.length) chatGreeting();
   setTimeout(function(){ var i=$("chat-input"); if(i) i.focus(); },60);
 }
 async function sendChat(){
-  const input=$("chat-input"); const text=(input.value||"").trim(); if(!text) return;
+  const input=$("chat-input"); const text=(input.value||"").trim();
+  if(!text && !chatImg) return;
   input.value="";
   if(!CHAT.length) $("chat-log").innerHTML="";
-  CHAT.push({role:"user",content:text}); chatBubble("user",text);
+  const sentImg=chatImg; chatImg=null; showAttachPreview();
+  CHAT.push({role:"user",content:text||"(photo)"});
+  const ub=chatBubble("user",text);
+  if(sentImg){ const im=document.createElement("img"); im.className="shot"; im.src=sentImg.url; ub.insertBefore(im, ub.firstChild); chatScroll(); }
   const thinking=chatBubble("bot","Linnaeus is thinking…"); thinking.style.opacity=".6";
   $("chat-send").disabled=true;
-  const res=await askLinnaeus({mode:"chat", messages:CHAT.slice(-24)});
+  const api=CHAT.slice(-24).map(function(m){ return {role:m.role,content:m.content}; });
+  if(sentImg && api.length){ const last=api[api.length-1];
+    last.content=[{type:"text",text:text||"What can you tell me about this plant?"},{type:"image",source:{type:"base64",media_type:sentImg.media,data:sentImg.b64}}]; }
+  const res=await askLinnaeus({mode:"chat", messages:api});
   $("chat-send").disabled=false; if(thinking&&thinking.remove) thinking.remove();
   if(res && res.text){ CHAT.push({role:"assistant",content:res.text}); chatBubble("bot",res.text); }
   else { chatBubble("bot",(res&&res.error)?res.error:"Something went wrong — try again."); }
