@@ -28,6 +28,16 @@ function money(n){ return (n==null||n==="")?"—":"$"+Number(n).toLocaleString(u
 
 /* ---------- auth ---------- */
 function showAuth(){ el.auth.classList.remove("hidden"); el.app.classList.add("hidden"); el.nav.classList.add("hidden"); var f=$("chat-fab"); if(f) f.classList.add("hidden"); }
+function startView(){
+  if(hasAddDraft()) return "add";
+  try{ const s=JSON.parse(localStorage.getItem("br_view")||"null");
+    if(s && s.v && (Date.now()-s.t) < 600000){            // returned within 10 minutes → resume
+      if(s.v==="admin") return isAdmin()? "admin" : "today";
+      if(["today","collection","add","supplies","quick","chat"].indexOf(s.v)>=0) return s.v;
+    }
+  }catch(e){}
+  return "today";                                          // away 10+ min (or first load) → Today
+}
 function showApp(user){
   el.auth.classList.add("hidden"); el.app.classList.remove("hidden"); el.nav.classList.remove("hidden");
   const meta = user.user_metadata || {};
@@ -37,7 +47,7 @@ function showApp(user){
   window.MY_EMAIL = user.email || "";
   $("who-name").textContent = window.ME;
   setupAdminNav();
-  go(hasAddDraft()? "add":"today");   // if an add was interrupted, resume it instead of losing it
+  go(startView());   // resume the last view if returning within 10 min, else Today
 }
 $("au-switch").onclick = (e)=>{ e.preventDefault(); signUpMode=!signUpMode;
   $("au-submit").textContent = signUpMode? "Create account":"Sign in";
@@ -69,6 +79,8 @@ sb.auth.getSession().then(({data})=>{ data.session? showApp(data.session.user) :
 
 /* ---------- navigation ---------- */
 const views = ["today","collection","add","plant","supplies","admin","quick","chat"];
+let LASTVIEW="today";
+function saveView(){ try{ localStorage.setItem("br_view", JSON.stringify({v:LASTVIEW,t:Date.now()})); }catch(e){} }
 function go(name){
   views.forEach(v=> $("v-"+v).classList.toggle("hidden", v!==name));
   document.querySelectorAll(".nav button").forEach(b=> b.classList.toggle("active", b.dataset.go===name));
@@ -81,10 +93,13 @@ function go(name){
   if(name==="chat") loadChat();
   var _fab=$("chat-fab"); if(_fab) _fab.classList.toggle("hidden", name==="chat");
   if(el&&el.nav) el.nav.style.display = (name==="chat") ? "none" : "";
+  LASTVIEW=name; saveView();
   window.scrollTo(0,0);
 }
 function setupAdminNav(){ const b=$("nav-admin"); if(b) b.style.display = isAdmin()? "" : "none"; }
 document.querySelectorAll(".nav button").forEach(b=> b.onclick=()=>{ if(b.dataset.go==='collection') collFilter=null; go(b.dataset.go); });
+document.addEventListener("visibilitychange", function(){ if(document.hidden) saveView(); });
+window.addEventListener("pagehide", saveView);
 $("go-add").onclick=()=>go("add");
 $("add-cancel").onclick=()=>{ addDraftClear(); go("collection"); };
 $("plant-back").onclick=()=>go("collection");
