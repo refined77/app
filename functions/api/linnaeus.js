@@ -19,7 +19,7 @@ Everything grows in one AC-controlled grow room in a Houston home (USDA 9a/9b). 
 - Humidity: target 60%+ (Hoyas fine at 55%+); cool-mist humidifiers + lightly enclosed rack row; constant gentle airflow from clip fans (mold/gnat/rot prevention).
 - Glass case sub-zone: velvet aroids (Anthurium warocqueanum, clarinervium) ~75–85% RH, fan inside essential; mix dries slowly → water less.
 - Quarantine: new/imported plants isolate 3–4 weeks (imports the full 4), re-treat for pests ~day 7–10; inspect, sticky traps, neem/insecticidal soap; clear only after clean.
-- Water: rainwater + distilled ONLY. Nutrients come from the mix (worm castings) + a dilute balanced fertilizer.
+- Water: RO + rainwater for everyday watering, remineralized with dilute Foliage-Pro every watering (a pinch of Cal-Mag in winter); distilled is reserved for props/tissue culture + humidifiers only. Extra nutrients come from the mix (worm castings).
 - Potting mixes (locked): base **House Mix** = 3 bark : 2 pumice/perlite : 1 coco coir : 1 charcoal : 1 worm castings. Climbing aroids: House Mix; velvet/thin-rooted Anthurium: chunkier, more bark + long-fiber sphagnum; Alocasia: +½ part coir, strong airflow, never soggy; Hoyas/epiphytes: chunkier, less coir, skip castings; semi-hydro LECA/Lechuza Pon: inert, weaker constant feed. Outdoor Aloe (exception): cactus mix 1:1 with pumice + coarse grit.
 - Aloe lives OUTDOORS (Houston: hot humid summers, heavy rain, winter freezes Dec–Feb).
 - Watering is ALWAYS "check, then water if dry," never a blind calendar.
@@ -54,7 +54,7 @@ Everything grows in one AC-controlled grow room in a Houston home (USDA 9a/9b). 
 - Humidity: target 60%+ (Hoyas fine at 55%+); cool-mist humidifiers + lightly enclosed rack row; constant gentle airflow from clip fans.
 - Glass case sub-zone: velvet aroids (Anthurium warocqueanum, clarinervium) ~75–85% RH, fan inside essential; mix dries slowly → water less.
 - Quarantine: new/imported plants isolate 3–4 weeks (imports the full 4), re-treat for pests ~day 7–10; inspect, sticky traps, neem/insecticidal soap; clear only after clean.
-- Water: rainwater + distilled ONLY. Nutrients come from the mix (worm castings) + a dilute balanced fertilizer.
+- Water: RO + rainwater for everyday watering, remineralized with dilute Foliage-Pro every watering (a pinch of Cal-Mag in winter); distilled is reserved for props/tissue culture + humidifiers only. Extra nutrients come from the mix (worm castings).
 - Potting mixes (locked): base **House Mix** = 3 bark : 2 pumice/perlite : 1 coco coir : 1 charcoal : 1 worm castings. Climbing aroids: House Mix; velvet/thin-rooted Anthurium: chunkier, more bark + long-fiber sphagnum; Alocasia: +½ part coir, strong airflow, never soggy; Hoyas/epiphytes: chunkier, less coir, skip castings; semi-hydro LECA/Lechuza Pon: inert, weaker constant feed. Outdoor Aloe (exception): cactus mix 1:1 with pumice + coarse grit.
 - Aloe lives OUTDOORS (Houston: hot humid summers, heavy rain, winter freezes Dec–Feb).
 - Watering is ALWAYS "check, then water if dry," never a blind calendar.
