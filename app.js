@@ -602,7 +602,7 @@ function tendedSummary(care){
 }
 function renderPlant(p, mother, kids, care, photos, health){
   window.CURRENT_PLANT = p;
-  const coverBg = p.cover_photo_url? `style="background-image:url('${p.cover_photo_url}');cursor:zoom-in;"` : "";
+  const coverBg = p.cover_photo_url? `style="background-image:url('${p.cover_photo_url}');cursor:pointer;"` : "";
   const houseName = p.house || p.unique_name || "—";
   const varieg = /varieg|albo|aurea|mint|thai constellation|variegata/i.test([p.cultivar,p.botanical_name,p.unique_name].filter(Boolean).join(' '));
   const idbits=[];
@@ -887,7 +887,7 @@ window.askPlant=async function(){
   ans.textContent=(v&&v.text)?v.text:(v&&v.error?("Linnaeus: "+v.error):"No answer.");
 };
 window.diagnoseConcern=function(){
-  const inp=document.createElement("input"); inp.type="file"; inp.accept="image/*"; inp.setAttribute("capture","environment");
+  const inp=document.createElement("input"); inp.type="file"; inp.accept="image/*";
   inp.onchange=async e=>{ const f=e.target.files&&e.target.files[0]; if(!f) return;
     const q=await checkPhotoQuality(f); if(!q.ok){ toast("Photo bounced — "+q.issues.join("; ")); return; }
     toast("Linnaeus is looking…");
@@ -1005,7 +1005,7 @@ async function loadQuick(){
       <div id="q-photo-prompt" style="color:var(--muted);font-size:13px;padding:30px;line-height:1.6;">＋ Tap to snap the plant<br><span style="font-size:11px;">Linnaeus names it for you</span></div>
       <img id="q-photo-preview" alt="" style="display:none;width:100%;max-height:300px;object-fit:cover;" />
     </div>
-    <input type="file" id="q-photo-input" accept="image/*" capture="environment" style="display:none;" />
+    <input type="file" id="q-photo-input" accept="image/*" style="display:none;" />
     <div id="q-id" class="fnote" style="display:none;margin-bottom:10px;"></div>
     <label class="field">Species<select id="q-botanical"></select></label>
     <div class="row2">
@@ -1226,7 +1226,7 @@ function renderPhotoGrid(photos){
   if(!photos || !photos.length) return '<div class="muted" style="font-size:13px;">No photos yet. Tap “Add photo”.</div>';
   return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;">' +
     photos.map(function(ph){
-      return '<div onclick="openZoom(\''+ph.image_url+'\')" style="aspect-ratio:1;border:1px solid var(--line);border-radius:2px;cursor:zoom-in;background:#0d0d0d center/cover no-repeat;background-image:url(\''+ph.image_url+'\');"></div>';
+      return '<div onclick="openZoom(\''+ph.image_url+'\')" style="aspect-ratio:1;border:1px solid var(--line);border-radius:2px;cursor:pointer;background:#0d0d0d center/cover no-repeat;background-image:url(\''+ph.image_url+'\');"></div>';
     }).join("") + '</div>';
 }
 /* ----- Tap-to-zoom lightbox (pinch is disabled app-wide, so this gives magnification) ----- */
@@ -1254,7 +1254,7 @@ window.addPhoto = function(){
   var inp = document.getElementById("photo-input");
   if(!inp){
     inp = document.createElement("input");
-    inp.type = "file"; inp.accept = "image/*"; inp.setAttribute("capture","environment");
+    inp.type = "file"; inp.accept = "image/*";
     inp.id = "photo-input"; inp.style.display = "none";
     document.body.appendChild(inp);
     inp.addEventListener("change", handlePhoto);
