@@ -21,6 +21,7 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          wranglerVersion: "4.101.0"
           command: pages deploy . --project-name=botanical-reverie --branch=main
         env:
           CLOUDFLARE_ACCOUNT_ID: 31f5dc4a18b578bd53720ca983f52a61
