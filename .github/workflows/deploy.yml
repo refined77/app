@@ -21,7 +21,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
 
       - name: Deploy to Cloudflare Pages
         run: npx --yes wrangler@4.101.0 pages deploy . --project-name=botanical-reverie --branch=main
