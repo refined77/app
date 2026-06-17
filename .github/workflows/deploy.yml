@@ -12,6 +12,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 6            # so a hung deploy auto-fails fast instead of spinning for hours
     permissions:
       contents: read
     steps:
@@ -28,3 +29,4 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: 31f5dc4a18b578bd53720ca983f52a61
+          WRANGLER_SEND_METRICS: "false"
