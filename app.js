@@ -602,7 +602,7 @@ function tendedSummary(care){
 }
 function renderPlant(p, mother, kids, care, photos, health){
   window.CURRENT_PLANT = p;
-  const coverBg = p.cover_photo_url? `style="background-image:url('${p.cover_photo_url}')"` : "";
+  const coverBg = p.cover_photo_url? `style="background-image:url('${p.cover_photo_url}');cursor:zoom-in;"` : "";
   const houseName = p.house || p.unique_name || "—";
   const varieg = /varieg|albo|aurea|mint|thai constellation|variegata/i.test([p.cultivar,p.botanical_name,p.unique_name].filter(Boolean).join(' '));
   const idbits=[];
@@ -621,7 +621,7 @@ function renderPlant(p, mother, kids, care, photos, health){
   $("plant-body").innerHTML = `
     <div style="display:flex;gap:8px;align-items:center;margin:6px 0 16px;"><button class="btn btn-sm" onclick="go('collection')">‹ Back</button><button class="btn btn-sm" onclick="editPlant()">Edit</button><span style="flex:1;"></span><button class="btn btn-sm" onclick="askDelete()" style="border-color:var(--garnet);color:var(--garnet-bright);">Delete</button></div>
     ${p.needs_id_review?renderResolve(p):''}
-    <div class="ghero" ${coverBg}>
+    <div class="ghero" ${coverBg} ${p.cover_photo_url?`onclick="openZoom('${p.cover_photo_url}')"`:''}>
       <div class="greg">Reverie Registry № BR-${pad(p.plant_no)}</div>
       ${p.cover_photo_url?'':'<div class="gglyph">❦</div>'}
       <div class="gcap">
@@ -738,10 +738,10 @@ function loadChat(){
   if(!chatWired){ chatWired=true;
     $("chat-send").onclick=sendChat;
     $("chat-input").addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); sendChat(); } });
-    var file=$("chat-file");
-    if(file){ file.onchange=async function(){ const f=this.files&&this.files[0]; this.value=""; if(!f) return;
+    var bindPick=function(inp){ if(!inp) return; inp.onchange=async function(){ const f=this.files&&this.files[0]; this.value=""; if(!f) return;
         const img=await fileToB64(f); if(!img){ return; }
-        chatImg={b64:img.b64,media:img.media,url:"data:"+img.media+";base64,"+img.b64}; showAttachPreview(); }; }
+        chatImg={b64:img.b64,media:img.media,url:"data:"+img.media+";base64,"+img.b64}; showAttachPreview(); }; };
+    bindPick($("chat-file")); bindPick($("chat-camera"));
   }
   if(!CHAT.length) chatGreeting();
   setTimeout(function(){ var i=$("chat-input"); if(i) i.focus(); },60);
@@ -759,7 +759,7 @@ async function sendChat(){
   $("chat-send").disabled=true;
   const api=CHAT.slice(-24).map(function(m){ return {role:m.role,content:m.content}; });
   if(sentImg && api.length){ const last=api[api.length-1];
-    last.content=[{type:"text",text:text||"What can you tell me about this plant?"},{type:"image",source:{type:"base64",media_type:sentImg.media,data:sentImg.b64}}]; }
+    last.content=[{type:"text",text:text||"Here's the photo."},{type:"image",source:{type:"base64",media_type:sentImg.media,data:sentImg.b64}}]; }
   const res=await askLinnaeus({mode:"chat", messages:api});
   $("chat-send").disabled=false; if(thinking&&thinking.remove) thinking.remove();
   if(res && res.text){ CHAT.push({role:"assistant",content:res.text}); chatBubble("bot",res.text); }
@@ -1226,8 +1226,28 @@ function renderPhotoGrid(photos){
   if(!photos || !photos.length) return '<div class="muted" style="font-size:13px;">No photos yet. Tap “Add photo”.</div>';
   return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;">' +
     photos.map(function(ph){
-      return '<div style="aspect-ratio:1;border:1px solid var(--line);border-radius:2px;background:#0d0d0d center/cover no-repeat;background-image:url(\''+ph.image_url+'\');"></div>';
+      return '<div onclick="openZoom(\''+ph.image_url+'\')" style="aspect-ratio:1;border:1px solid var(--line);border-radius:2px;cursor:zoom-in;background:#0d0d0d center/cover no-repeat;background-image:url(\''+ph.image_url+'\');"></div>';
     }).join("") + '</div>';
+}
+/* ----- Tap-to-zoom lightbox (pinch is disabled app-wide, so this gives magnification) ----- */
+window.openZoom=function(url){
+  if(!url) return;
+  var box=$("zoombox"), img=$("zoom-img"); if(!box||!img) return;
+  wireZoom();
+  img.src=url; if(window.__zoomReset) window.__zoomReset();
+  box.classList.remove("hidden");
+};
+window.closeZoom=function(){ var b=$("zoombox"); if(b) b.classList.add("hidden"); };
+window.closeZoomBg=function(e){ if(e.target && e.target.id==="zoombox") window.closeZoom(); };
+function wireZoom(){
+  var box=$("zoombox"), img=$("zoom-img"); if(!box||box.__wired) return; box.__wired=true;
+  var st={scale:1,tx:0,ty:0}, start=null, moved=0;
+  function apply(){ img.style.transform="translate("+st.tx+"px,"+st.ty+"px) scale("+st.scale+")"; img.classList.toggle("zoomed", st.scale>1); }
+  window.__zoomReset=function(){ st={scale:1,tx:0,ty:0}; apply(); };
+  img.addEventListener("pointerdown",function(e){ start={x:e.clientX,y:e.clientY,tx:st.tx,ty:st.ty}; moved=0; try{img.setPointerCapture(e.pointerId);}catch(_){} });
+  img.addEventListener("pointermove",function(e){ if(!start) return; var dx=e.clientX-start.x, dy=e.clientY-start.y; moved=Math.max(moved,Math.abs(dx)+Math.abs(dy)); if(st.scale>1){ st.tx=start.tx+dx; st.ty=start.ty+dy; apply(); } });
+  function up(){ if(!start) return; var tap=moved<10; start=null; if(tap){ if(st.scale>1){ st.scale=1; st.tx=0; st.ty=0; } else { st.scale=2.5; } apply(); } }
+  img.addEventListener("pointerup",up); img.addEventListener("pointercancel",function(){ start=null; });
 }
 window.addPhoto = function(){
   if(!currentPlantId) return;

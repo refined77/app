@@ -72,6 +72,12 @@
   .chat-inwrap{max-width:1000px;margin:0 auto;display:flex;gap:8px;padding:0 14px;align-items:center;}
   .chat-iconbtn{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--gold);color:var(--gold);width:40px;height:40px;border-radius:50%;font-size:17px;line-height:1;cursor:pointer;padding:0;}
   .chat-file-hidden{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0);border:0;padding:0;}
+  /* tap-to-zoom lightbox (pinch is disabled app-wide, so this provides magnification) */
+  #zoombox{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.94);display:flex;align-items:center;justify-content:center;overflow:hidden;touch-action:none;}
+  #zoombox.hidden{display:none;}
+  #zoom-img{max-width:100%;max-height:100%;object-fit:contain;transform-origin:center center;transition:transform .12s ease;cursor:zoom-in;user-select:none;-webkit-user-select:none;-webkit-user-drag:none;}
+  #zoom-img.zoomed{cursor:grab;transition:none;}
+  #zoom-close{position:absolute;top:14px;right:16px;z-index:2;background:rgba(0,0,0,.55);border:1px solid var(--gold);color:var(--cream);width:44px;height:44px;border-radius:50%;font-size:26px;line-height:1;cursor:pointer;padding:0;}
   #chat-input{flex:1 1 auto;min-width:0;margin:0;}
   #chat-send{flex:0 0 auto;}
 
@@ -91,7 +97,7 @@
   .auth-card{width:100%;max-width:380px;text-align:center;}
   .auth-card .mark{font-family:'Cormorant Garamond',serif;font-size:54px;color:var(--gold);line-height:1;}
   .auth-logo{width:240px;max-width:80%;display:block;margin:0 auto 8px;}
-  .topbar .brand-logo{height:44px;width:auto;display:block;}
+  .topbar .brand-logo{height:60px;width:auto;display:block;}
   .auth-card h1{font-size:30px;letter-spacing:.04em;margin:6px 0 2px;}
   .auth-card .tag{font-style:italic;color:var(--cream);font-size:17px;margin-bottom:4px;}
   .auth-card form{margin-top:26px;text-align:left;}
@@ -503,8 +509,10 @@
   <div id="chat-inputbar">
     <div id="chat-attach-preview" class="hidden"></div>
     <div class="chat-inwrap">
-      <label for="chat-file" class="chat-iconbtn" title="Add a photo">&#128247;</label>
+      <label for="chat-file" class="chat-iconbtn" title="Choose a photo">&#128444;</label>
       <input id="chat-file" type="file" accept="image/*" class="chat-file-hidden" />
+      <label for="chat-camera" class="chat-iconbtn" title="Take a photo">&#128247;</label>
+      <input id="chat-camera" type="file" accept="image/*" capture="environment" class="chat-file-hidden" />
       <input id="chat-input" type="text" placeholder="Ask Linnaeus&hellip;" autocomplete="off" />
       <button id="chat-send" class="btn btn-gold btn-sm">Send</button>
     </div>
@@ -513,6 +521,12 @@
 
 <!-- FLOATING CHAT BUTTON -->
 <button id="chat-fab" class="hidden" onclick="go('chat')" title="Ask Linnaeus"><span class="spark">&#10022;</span><span class="lbl">Ask Linnaeus</span></button>
+
+<!-- TAP-TO-ZOOM LIGHTBOX -->
+<div id="zoombox" class="hidden" onclick="closeZoomBg(event)">
+  <button id="zoom-close" onclick="closeZoom()" aria-label="Close" title="Close">&times;</button>
+  <img id="zoom-img" src="" alt="Photo" />
+</div>
 
 <!-- NAV -->
 <nav class="nav hidden" id="nav">

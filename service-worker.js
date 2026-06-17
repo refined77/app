@@ -1,5 +1,5 @@
 /* Botanical Reverie — offline shell, network-first so updates always land */
-const CACHE = "br-app-v8";
+const CACHE = "br-app-v9";
 const ASSETS = ["./", "./index.html", "./app.js", "./manifest.webmanifest", "./icon-192.png", "./icon-512.png", "./icon-512-maskable.png", "./apple-touch-icon.png"];
 
 self.addEventListener("install", (e) => {
