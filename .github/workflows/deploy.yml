@@ -1,0 +1,26 @@
+name: Deploy to Cloudflare Pages
+
+# Publishes the Botanical Reverie OPS app to the `botanical-reverie`
+# Cloudflare Pages project on every push to main.
+# Requires one repo secret: CLOUDFLARE_API_TOKEN (Cloudflare Pages: Edit).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}      # lets you trigger a deploy by hand from the Actions tab
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          command: pages deploy . --project-name=botanical-reverie --branch=main
+        env:
+          CLOUDFLARE_ACCOUNT_ID: 31f5dc4a18b578bd53720ca983f52a61
