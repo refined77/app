@@ -233,6 +233,7 @@ function renderColl(plants){
 /* ---------- ADD ---------- */
 /* type → what the form asks for */
 const ACQ = {
+  "Founding plant":      {mother:false, vendor:true,  needMother:false, needVendor:false, founding:true},
   "Purchased":           {mother:false, vendor:true,  needMother:false, needVendor:true},
   "Trade / Gift":        {mother:false, vendor:true,  needMother:false, needVendor:true},
   "Tissue culture":      {mother:false, vendor:true,  needMother:false, needVendor:true},
@@ -394,6 +395,26 @@ function suggestNextName(m){
   return nm+" II";
 }
 
+/* Type the first part of the name, tap a second half — on-brand epithets (Poetic-Names-Library) */
+const NAME_SUFFIXES=["in Garnet","of the Oxblood Hour","Vespers","in Shadow","of Evenfall","in Gold",
+  "of the Conservatory","in Velvet","of Dusk","the First","in Carmine","of the Gilded Hour","Noir",
+  "in Bloom","of the Quiet Glow","the Elder","in Repose","of Nightfall","of House Garnet","Ember"];
+let nameSuffixOffset=0;
+function renderNameSuffixes(){
+  const box=$("f-name-suffixes"); if(!box) return;
+  const n=6, arr=[];
+  for(let i=0;i<n;i++) arr.push(NAME_SUFFIXES[(nameSuffixOffset+i)%NAME_SUFFIXES.length]);
+  box.innerHTML=arr.map(s=>`<span class="chip" data-suf="${escAttr(s)}" style="cursor:pointer;text-transform:none;letter-spacing:.03em;font-size:12px;">${s}</span>`).join("");
+}
+function appendNameSuffix(suf){
+  const el=$("f-name"); if(!el) return;
+  const base=(el.value||"").trim();
+  if(base.toLowerCase().endsWith(suf.toLowerCase())){ el.focus(); return; }
+  el.value = base ? base+" "+suf : suf;
+  el.dispatchEvent(new Event("input",{bubbles:true}));   // fires the draft autosave
+  el.focus();
+}
+
 async function saveNewName(){
   const bot=($("an-bot").value||"").trim(), com=($("an-common").value||"").trim(), med=$("an-medium").value, msg=$("an-msg");
   const warn=(t)=>{ msg.style.display="block"; msg.className="fnote warn"; msg.textContent=t; };
@@ -441,6 +462,10 @@ function wireAddForm(){
   });
   $("an-save").addEventListener("click", saveNewName);
   $("an-cancel").addEventListener("click", ()=>{ $("f-addname").style.display="none"; $("f-botanical").value=""; });
+  // name second-half suggestions — type the first part, tap to finish it
+  renderNameSuffixes();
+  const dice=$("f-name-dice"); if(dice) dice.addEventListener("click", ()=>{ nameSuffixOffset=(nameSuffixOffset+6)%NAME_SUFFIXES.length; renderNameSuffixes(); });
+  const sufBox=$("f-name-suffixes"); if(sufBox) sufBox.addEventListener("click", e=>{ const c=e.target.closest(".chip[data-suf]"); if(!c) return; appendNameSuffix(c.dataset.suf); });
   // photo capture
   $("f-photo-zone").addEventListener("click", ()=> $("f-photo-input").click());
   $("f-photo-input").addEventListener("change", async e=>{
@@ -456,6 +481,7 @@ function wireAddForm(){
       return;
     }
     addPhotoFile=file; verifyOK=false; window.__lastIdentify=null;
+    idbPutPhoto(file);   // persist immediately so leaving the app to look something up can't lose it
     const vnote=$("f-verify-note"); if(vnote) vnote.style.display="none";
     const img=$("f-photo-preview"), pr=$("f-photo-prompt");
     img.src=URL.createObjectURL(file); img.style.display="block"; pr.style.display="none";
@@ -788,6 +814,7 @@ async function runIdentify(file){
     return;
   }
   window.__lastIdentify=v.result;
+  addDraftSave();   // keep the AI ID with the draft so it survives an app-switch too
   renderIdCandidates(v.result);
 }
 function idChip(c, onclickAttr){
@@ -853,21 +880,33 @@ window.reIdentifyPlant=async function(id){
   if(out) out.innerHTML='<div class="chips">'+v.result.candidates.map(c=>idChip(c,`onclick="resolveId('${id}', this.getAttribute('data-bot'), this.getAttribute('data-com'))"`)).join('')+'</div>'+(v.result.note?`<div class="fnote" style="margin-top:6px;">${v.result.note}</div>`:'');
 };
 
+/* ----- Photo survives leaving the app: stash the File in IndexedDB so switching to another
+        app to look something up can never wipe it (localStorage can't hold a File) ----- */
+const IDB_NAME="br_add", IDB_STORE="photo", IDB_KEY="add-photo";
+function idbOpen(){ return new Promise((res,rej)=>{ let r; try{ r=indexedDB.open(IDB_NAME,1); }catch(e){ return rej(e); }
+  r.onupgradeneeded=()=>{ try{ r.result.createObjectStore(IDB_STORE); }catch(e){} };
+  r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+async function idbPutPhoto(file){ try{ const db=await idbOpen(); return await new Promise((res,rej)=>{ const tx=db.transaction(IDB_STORE,"readwrite"); tx.objectStore(IDB_STORE).put(file,IDB_KEY); tx.oncomplete=()=>res(true); tx.onerror=()=>rej(tx.error); }); }catch(e){ return false; } }
+async function idbGetPhoto(){ try{ const db=await idbOpen(); return await new Promise((res)=>{ const tx=db.transaction(IDB_STORE,"readonly"); const rq=tx.objectStore(IDB_STORE).get(IDB_KEY); rq.onsuccess=()=>res(rq.result||null); rq.onerror=()=>res(null); }); }catch(e){ return null; } }
+async function idbDelPhoto(){ try{ const db=await idbOpen(); return await new Promise((res)=>{ const tx=db.transaction(IDB_STORE,"readwrite"); tx.objectStore(IDB_STORE).delete(IDB_KEY); tx.oncomplete=()=>res(true); tx.onerror=()=>res(false); }); }catch(e){ return false; } }
+
 /* ----- Never lose an in-progress Add (autosave the draft) ----- */
 function addDraftSave(){
   const f=$("add-form"); if(!f) return;
   const d={};
   f.querySelectorAll("input,select,textarea").forEach(el=>{ if(el.type==="file"||!el.id) return; d[el.id]=el.value; });
   d.__cond=[...condSel];
+  d.__identify=window.__lastIdentify||null;
+  d.__hasPhoto=!!addPhotoFile;
   if(d["f-acqtype"]||d["f-name"]||d["f-botanical"]||addPhotoFile){ try{ localStorage.setItem("br_add_draft", JSON.stringify(d)); }catch(e){} }
 }
-function addDraftClear(){ try{ localStorage.removeItem("br_add_draft"); }catch(e){} }
+function addDraftClear(){ try{ localStorage.removeItem("br_add_draft"); }catch(e){} idbDelPhoto(); }
 function hasAddDraft(){ try{ return !!localStorage.getItem("br_add_draft"); }catch(e){ return false; } }
-function addDraftRestore(){
+async function addDraftRestore(){
   let d; try{ d=JSON.parse(localStorage.getItem("br_add_draft")||"null"); }catch(e){ d=null; }
   if(!d) return false;
   if(d["f-botanical"]) ensureBotanical(d["f-botanical"]);
-  Object.keys(d).forEach(k=>{ if(k==="__cond") return; const el=$(k); if(el) el.value=d[k]; });
+  Object.keys(d).forEach(k=>{ if(k.indexOf("__")===0) return; const el=$(k); if(el) el.value=d[k]; });
   applyAcq(d["f-acqtype"]||"");
   if(/^Rack/.test(d["f-zone"]||"")) $("f-shelf-wrap").style.display="block";
   if(d["f-zone"]==="Other") $("f-zone-other").style.display="block";
@@ -876,7 +915,24 @@ function addDraftRestore(){
   [...$("f-cond-chips").children].forEach(c=>{ if(condSel.has(c.dataset.c)) c.classList.add("on"); });
   if(condSel.has("Other")) $("f-cond-other").style.display="block";
   if(d["f-botanical"]) onBotanical();
-  const note=$("add-msg"); if(note){ note.style.color="var(--gold)"; note.textContent="Draft restored — re-add the photo to finish."; }
+  if(d.__identify) window.__lastIdentify=d.__identify;
+  // bring the photo back from IndexedDB — this is what was getting lost on an app-switch
+  let photoBack=false;
+  if(d.__hasPhoto){
+    try{
+      const file=await idbGetPhoto();
+      if(file){ addPhotoFile=file; photoBack=true;
+        const img=$("f-photo-preview"), pr=$("f-photo-prompt");
+        if(img){ img.src=URL.createObjectURL(file); img.style.display="block"; }
+        if(pr) pr.style.display="none";
+        const pz=$("f-photo-zone"); if(pz) pz.classList.remove("bad");
+      }
+    }catch(e){}
+  }
+  const note=$("add-msg");
+  if(note){ note.style.color="var(--gold)";
+    note.textContent = photoBack ? "Draft restored — your photo’s still here. Finish and save."
+                                 : "Draft restored — re-add the photo to finish."; }
   return true;
 }
 window.askPlant=async function(){

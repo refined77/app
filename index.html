@@ -305,6 +305,7 @@
       <label class="field">How it came to us
         <select id="f-acqtype" required>
           <option value="">— Choose one —</option>
+          <option value="Founding plant">Founding plant — starts a new line</option>
           <option>Purchased</option>
           <option>Trade / Gift</option>
           <option>Tissue culture</option>
@@ -377,7 +378,7 @@
 
       <div class="row2">
         <label class="field">Our name for it
-          <input id="f-name" placeholder="e.g. Lady in Garnet" required />
+          <input id="f-name" placeholder="e.g. Lady…" required />
           <span id="f-name-sug" class="fnote" style="display:none;"></span>
         </label>
         <label class="field">Status
@@ -387,6 +388,15 @@
             <option>Reserved</option><option>Sold</option><option>Gifted</option><option>Lost</option>
           </select>
         </label>
+      </div>
+
+      <!-- Name second-half suggestions — type the first part, tap to finish it -->
+      <div id="f-name-suffix-wrap" style="margin:-2px 0 4px;">
+        <div class="label" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+          Finish the name <span class="fnote" style="text-transform:none;letter-spacing:0;opacity:.7;">— tap a second half, or type your own</span>
+          <button type="button" id="f-name-dice" class="btn btn-sm" style="margin-left:auto;padding:3px 9px;">🎲 More</button>
+        </div>
+        <div id="f-name-suffixes" class="chips" style="margin-top:0;"></div>
       </div>
 
       <!-- 3 · CONDITION (multi) -->
