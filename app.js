@@ -115,11 +115,16 @@ async function fetchPlants(){
 async function loadToday(){
   $("today-date").textContent = new Date().toLocaleDateString(undefined,{weekday:"long",month:"long",day:"numeric",year:"numeric"});
   const plants = await fetchPlants();
-  const total = plants.length;
-  const value = plants.reduce((s,p)=>s+(Number(p.current_value)||0),0);
+  // business numbers count Botanical Reverie only; care lists below cover every plant (home included)
+  const isBR = p=>(p.collection||"Botanical Reverie")==="Botanical Reverie";
+  const br = plants.filter(isBR);
+  const homeCount = plants.filter(p=>p.collection==="Michi").length;
+  const lauraCount = plants.filter(p=>p.collection==="Laura").length;
+  const total = br.length;
+  const value = br.reduce((s,p)=>s+(Number(p.current_value)||0),0);
   const quarantine = plants.filter(p=>p.status==="Quarantine").length;
-  const ready = plants.filter(p=>p.status==="Ready to Sell").length;
-  const mothers = plants.filter(p=>p.status==="Mother Plant").length;
+  const ready = br.filter(p=>p.status==="Ready to Sell").length;
+  const mothers = br.filter(p=>p.status==="Mother Plant").length;
   const recentRes = await sb.from("care_log").select("action,done_at,done_by_name,plant_id,plant(unique_name)").order("done_at",{ascending:false}).limit(12);
   const recent = recentRes.data || [];
   let review=[];
@@ -135,12 +140,14 @@ async function loadToday(){
   window.__todaySummary = `Collection ${total} plants; quarantine ${quarantine}; ready to sell ${ready}; mother plants ${mothers}. Needs check/water (${needs.length}): ` + (needs.slice(0,10).map(x=>`${x.p.unique_name||x.p.common_name||'Unnamed'} (${x.days===null?'no water logged':x.days+'d since water'})`).join('; ')||'none') + '.';
   $("today-body").innerHTML = `
     <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr));">
-      ${tile("In the collection", total, 'all')}
-      ${tile("Collection value", money(value), 'all')}
-      ${tile("In quarantine", quarantine, 'Quarantine')}
-      ${tile("Ready to sell", ready, 'Ready to Sell')}
-      ${tile("Mother plants", mothers, 'Mother Plant')}
+      ${tile("In the collection", total, 'all', 'Botanical Reverie')}
+      ${tile("Collection value", money(value), 'all', 'Botanical Reverie')}
+      ${tile("In quarantine", quarantine, 'Quarantine', '')}
+      ${tile("Ready to sell", ready, 'Ready to Sell', 'Botanical Reverie')}
+      ${tile("Mother plants", mothers, 'Mother Plant', 'Botanical Reverie')}
     </div>
+    ${(homeCount||lauraCount)?`<div class="muted" style="font-size:12px;margin-top:10px;letter-spacing:.03em;">＋ personal plants on the same care schedule, kept off the books:
+      ${homeCount?`<a style="cursor:pointer;color:var(--gold);" onclick="selectCollection('all','Michi')">${homeCount} of yours</a>`:''}${(homeCount&&lauraCount)?' · ':''}${lauraCount?`<a style="cursor:pointer;color:var(--gold);" onclick="selectCollection('all','Laura')">${lauraCount} of Laura’s</a>`:''}</div>`:''}
     <div class="section-t"><div class="label flank" style="justify-content:flex-start;">LINNAEUS — TODAY</div>
       <div style="margin-top:10px;"><button type="button" class="btn btn-sm btn-gold" onclick="todayBrief()">✦ What needs attention</button></div>
       <div id="ai-today" class="roomnote" style="display:none;margin-top:10px;white-space:pre-wrap;"></div>
@@ -171,8 +178,8 @@ function shortWhen(iso){
   if(diff<86400) return Math.floor(diff/3600)+"h ago";
   return d.toLocaleDateString(undefined,{month:"short",day:"numeric"});
 }
-function tile(label,val,action){
-  const click = action ? `onclick="selectCollection('${action}')" style="cursor:pointer;"` : `style="cursor:default;"`;
+function tile(label,val,action,world){
+  const click = action ? `onclick="selectCollection('${action}',${world!==undefined?`'${world}'`:'undefined'})" style="cursor:pointer;"` : `style="cursor:default;"`;
   return `<div class="card stat" ${click}><div class="body">
     <div class="label">${label}</div>
     <div style="font-family:'Cormorant Garamond',serif;font-size:34px;color:var(--cream);margin-top:6px;">${val}</div>
@@ -180,11 +187,16 @@ function tile(label,val,action){
 }
 
 /* ---------- COLLECTION ---------- */
-let collFilter = null;
-window.selectCollection = function(f){ collFilter = (f && f!=='all') ? f : null; go('collection'); };
+let collFilter = null, collWorldOnce;
+window.selectCollection = function(f, world){ collFilter = (f && f!=='all') ? f : null; collWorldOnce = world; go('collection'); };
 async function loadCollection(){
   await fetchPlants();
   if(collFilter){ const f=$("coll-filter"); if(f) f.value=collFilter; collFilter=null; }
+  const w=$("coll-world");
+  if(w){
+    if(collWorldOnce!==undefined){ w.value=collWorldOnce; collWorldOnce=undefined; }
+    else { try{ w.value=localStorage.getItem("br_coll_world")||""; }catch(e){} }
+  }
   applyColl();
 }
 function sortPlants(arr, mode){
@@ -200,8 +212,10 @@ function sortPlants(arr, mode){
 function applyColl(){
   const q=($("coll-search").value||'').toLowerCase().trim();
   const f=$("coll-filter")?$("coll-filter").value:'';
+  const w=$("coll-world")?$("coll-world").value:'';
   const sort=$("coll-sort")?$("coll-sort").value:'new';
   let list=CACHE.slice();
+  if(w) list=list.filter(p=>(p.collection||'Botanical Reverie')===w);
   if(f==='__needsid') list=list.filter(p=>p.needs_id_review);
   else if(f) list=list.filter(p=>p.status===f);
   if(q) list=list.filter(p=>[p.unique_name,p.botanical_name,p.common_name,p.house,p.location_zone,lineageCode(p)].filter(Boolean).join(' ').toLowerCase().includes(q));
@@ -213,6 +227,7 @@ function applyColl(){
 $("coll-search").oninput = applyColl;
 if($("coll-filter")) $("coll-filter").onchange = applyColl;
 if($("coll-sort")) $("coll-sort").onchange = applyColl;
+if($("coll-world")) $("coll-world").onchange = ()=>{ try{ localStorage.setItem("br_coll_world", $("coll-world").value); }catch(e){} applyColl(); };
 function renderColl(plants){
   const g=$("coll-grid");
   if(!plants.length){ g.innerHTML=`<div class="empty"><div class="big">No specimens.</div><div>Adjust the filters, or tap “Add a Plant.”</div></div>`; return; }
@@ -304,7 +319,7 @@ function fillSelect(id, arr, placeholder){
   s.innerHTML = (placeholder?`<option value="">${placeholder}</option>`:"") + arr.map(v=>`<option>${v}</option>`).join("");
 }
 function resetAddVis(){
-  ["f-cond-other","f-cond-quar","f-zone-other","f-shelf-wrap","f-pot-other","f-addname","f-vdup","f-name-sug","f-inherit","f-recipe","f-cult-add","f-photo-note","f-verify-note","f-id-suggest"].forEach(id=>{ const e=$(id); if(e) e.style.display="none"; });
+  ["f-cond-other","f-cond-quar","f-zone-other","f-shelf-wrap","f-pot-other","f-addname","f-vdup","f-name-sug","f-inherit","f-recipe","f-cult-add","f-photo-note","f-verify-note","f-id-suggest","f-collection-note"].forEach(id=>{ const e=$(id); if(e) e.style.display="none"; });
   const vs=$("f-vsug"); if(vs){ vs.classList.remove("open"); vs.innerHTML=""; }
 }
 
@@ -430,6 +445,8 @@ async function saveNewName(){
 }
 
 function wireAddForm(){
+  const fc=$("f-collection");
+  if(fc) fc.addEventListener("change", ()=>{ const n=$("f-collection-note"); if(n) n.style.display = (fc.value&&fc.value!=="Botanical Reverie")?"block":"none"; });
   $("f-acqtype").addEventListener("change", e=>applyAcq(e.target.value));
   $("f-botanical").addEventListener("change", onBotanical);
   $("f-medium").addEventListener("change", ()=>showRecipe($("f-medium").value));
@@ -550,6 +567,7 @@ async function submitAdd(e){
   if($("f-variegated").checked && !/varieg/i.test(cultivar)) cultivar = cultivar? cultivar+" (variegated)" : "Variegated";
   const rec={
     unique_name:$("f-name").value.trim(), status:$("f-status").value,
+    collection:($("f-collection")&&$("f-collection").value)||"Botanical Reverie",
     botanical_name:bot, common_name:val("f-common"), cultivar:cultivar||null,
     mother_id:(cfg&&cfg.mother&&motherId)?motherId:null,
     date_entered:$("f-date").value||null, acquisition_type:t,
@@ -629,6 +647,10 @@ function tendedSummary(care){
 function renderPlant(p, mother, kids, care, photos, health){
   window.CURRENT_PLANT = p;
   const coverBg = p.cover_photo_url? `style="background-image:url('${p.cover_photo_url}');cursor:pointer;"` : "";
+  const coll = p.collection||"Botanical Reverie";
+  const isHome = coll!=="Botanical Reverie";   // personal (Home or Laura) — kept off the business books
+  const personalLabel = coll==="Laura" ? "Laura’s collection — personal" : "Michi’s collection — personal";
+  const personalChip = coll==="Laura" ? "Laura" : "Michi";
   const houseName = p.house || p.unique_name || "—";
   const varieg = /varieg|albo|aurea|mint|thai constellation|variegata/i.test([p.cultivar,p.botanical_name,p.unique_name].filter(Boolean).join(' '));
   const idbits=[];
@@ -652,11 +674,12 @@ function renderPlant(p, mother, kids, care, photos, health){
       ${p.cover_photo_url?'':'<div class="gglyph">❦</div>'}
       <div class="gcap">
         <div class="gname">${p.unique_name||p.common_name||"Unnamed"}</div>
-        <div class="ghouse">House of ${houseName} &nbsp;·&nbsp; Generation ${roman(p.generation||1)}</div>
+        <div class="ghouse">${isHome?personalLabel:`House of ${houseName} &nbsp;·&nbsp; Generation ${roman(p.generation||1)}`}</div>
       </div>
     </div>
     ${idbits.length?`<div class="idline-c">${idbits.join('')}</div>`:''}
     <div class="chips-c">
+      ${isHome?`<span class="chip">${personalChip}</span>`:''}
       <span class="chip g">${p.status||""}</span>
       ${varieg?'<span class="chip">Variegated</span>':''}
       ${(p.cultivar&&!varieg)?`<span class="chip">${p.cultivar}</span>`:''}
@@ -711,7 +734,7 @@ function renderPlant(p, mother, kids, care, photos, health){
 
     ${p.notes?`<div class="section-t"><div class="label flank">Notes</div><p class="muted" style="margin:10px auto 0;text-align:center;max-width:54ch;">${p.notes}</p></div>`:""}
 
-    <div class="section-t">
+    ${isHome?'':`<div class="section-t">
       <div class="label flank">Lineage — House of ${houseName}</div>
       <div style="margin-top:12px;text-align:center;">
         ${mother?`<div class="muted" style="font-size:13px;">Mother: <a href="#" onclick="openPlant('${mother.id}');return false;">${mother.unique_name||"Unnamed"}</a> (${lineageCode(mother)})</div>`:`<div class="muted" style="font-size:13px;">Founder of this House.</div>`}
@@ -722,7 +745,7 @@ function renderPlant(p, mother, kids, care, photos, health){
             <div class="meta"><span class="dot"></span>${k.status||""}</div>
           </div></div>`).join("")}</div>` : `<div class="muted" style="font-size:13px;margin-top:8px;">No propagations yet.</div>`}
       </div>
-    </div>`;
+    </div>`}`;
 }
 function kv(k,v){ return v? `<div class="k">${k}</div><div>${v}</div>` : ""; }
 
@@ -915,6 +938,7 @@ async function addDraftRestore(){
   [...$("f-cond-chips").children].forEach(c=>{ if(condSel.has(c.dataset.c)) c.classList.add("on"); });
   if(condSel.has("Other")) $("f-cond-other").style.display="block";
   if(d["f-botanical"]) onBotanical();
+  { const fc=$("f-collection"), n=$("f-collection-note"); if(fc&&n) n.style.display = (fc.value&&fc.value!=="Botanical Reverie")?"block":"none"; }
   if(d.__identify) window.__lastIdentify=d.__identify;
   // bring the photo back from IndexedDB — this is what was getting lost on an app-switch
   let photoBack=false;
@@ -1479,8 +1503,11 @@ window.editPlant = function(){
     <label class="field">Our name<input id="e-name" value="${escAttr(p.unique_name)}" /></label>
     <div class="row2">
       <label class="field">Status<select id="e-status">${statuses.map(s=>`<option ${s===p.status?'selected':''}>${s}</option>`).join("")}</select></label>
-      <label class="field">Zone<input id="e-zone" value="${escAttr(p.location_zone)}" /></label>
+      <label class="field">Belongs to<select id="e-collection">
+        ${["Botanical Reverie","Michi","Laura"].map(c=>`<option value="${c}" ${ (p.collection||"Botanical Reverie")===c?'selected':''}>${c==="Michi"?"Michi — mine":c==="Laura"?"Laura — hers":"Botanical Reverie"}</option>`).join("")}
+      </select></label>
     </div>
+    <label class="field">Zone<input id="e-zone" value="${escAttr(p.location_zone)}" /></label>
     <div class="row2">
       <label class="field">Botanical name<input id="e-botanical" value="${escAttr(p.botanical_name)}" /></label>
       <label class="field">Common name<input id="e-common" value="${escAttr(p.common_name)}" /></label>
@@ -1503,6 +1530,7 @@ window.savePlantEdit = async function(){
   if(!currentPlantId) return;
   var rec = {
     unique_name: val("e-name"), status: $("e-status").value,
+    collection: ($("e-collection")&&$("e-collection").value)||"Botanical Reverie",
     location_zone: val("e-zone"), botanical_name: val("e-botanical"), common_name: val("e-common"),
     pot_type: val("e-pot"),
     current_value: num("e-value"), target_price: num("e-target"), asking_price: num("e-asking"),

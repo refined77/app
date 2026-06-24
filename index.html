@@ -262,6 +262,12 @@
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
       <input type="text" id="coll-search" placeholder="Search name, species, code…" style="flex:1;min-width:150px;margin:0;" />
+      <select id="coll-world" style="width:auto;margin:0;">
+        <option value="">All plants</option>
+        <option value="Botanical Reverie">Botanical Reverie</option>
+        <option value="Michi">Michi</option>
+        <option value="Laura">Laura</option>
+      </select>
       <select id="coll-filter" style="width:auto;margin:0;">
         <option value="">All statuses</option>
         <option>In Collection</option><option>Quarantine</option><option>Mother Plant</option>
@@ -300,6 +306,16 @@
         <li>Dust the leaves; best side to the camera.</li>
       </ul>
       <div id="f-photo-note" class="fnote warn" style="display:none;margin-bottom:16px;"></div>
+
+      <!-- 0 · WHICH WORLD — business vs personal -->
+      <label class="field">Whose plant is this
+        <select id="f-collection">
+          <option value="Botanical Reverie">Botanical Reverie (the business)</option>
+          <option value="Michi">Michi — my personal plant</option>
+          <option value="Laura">Laura — her personal plant</option>
+        </select>
+        <span id="f-collection-note" class="fnote" style="display:none;">A personal plant — same care &amp; reminders, kept out of the business books (no value, no lineage).</span>
+      </label>
 
       <!-- 1 · HOW IT CAME TO US — drives the rest of the form -->
       <label class="field">How it came to us
