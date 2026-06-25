@@ -106,7 +106,7 @@
   .endorse{margin-top:34px;font-size:9px;letter-spacing:.28em;color:var(--sage);text-transform:uppercase;}
 
   /* APP CHROME */
-  #app-view{max-width:1000px;margin:0 auto;padding:0 18px 110px;}
+  #app-view{max-width:1000px;margin:0 auto;padding:0 18px calc(104px + env(safe-area-inset-bottom));}
   .topbar{position:sticky;top:0;z-index:20;background:rgba(17,17,17,.92);backdrop-filter:blur(8px);
     display:flex;align-items:center;justify-content:space-between;padding:16px 2px 14px;border-bottom:1px solid var(--line);}
   .topbar .brand{font-family:'Cormorant Garamond',serif;font-size:22px;color:var(--cream);letter-spacing:.04em;}
@@ -129,6 +129,8 @@
   .view-head h2::after{content:"";display:block;width:54px;height:2px;background:var(--garnet);border-radius:1px;margin-top:10px;}
   .card.stat{position:relative;}
   .card.stat::before{content:"";position:absolute;left:0;top:14px;bottom:14px;width:3px;background:var(--eucalyptus);opacity:.85;border-radius:2px;}
+  .card.stat.personal::before{background:var(--garnet);opacity:1;}
+  .card.stat.personal .label{color:var(--garnet-bright);}
   .card.stat .body{padding-left:18px;}
   .card.stat .body > div:last-child{color:var(--cream);}
   /* section labels: gold rule + a green grace note */
@@ -327,7 +329,7 @@
           <option>Tissue culture</option>
           <option>Cutting</option>
           <option>Division</option>
-          <option>Our own propagation</option>
+          <option>Propagation</option>
         </select>
       </label>
 
@@ -401,7 +403,8 @@
           <select id="f-status" required>
             <option>In Collection</option><option>Quarantine</option><option>Mother Plant</option>
             <option>Propagating</option><option>Ready to Sell</option><option>Listed</option>
-            <option>Reserved</option><option>Sold</option><option>Gifted</option><option>Lost</option>
+            <option>Reserved</option><option>Not for sale</option>
+            <option>Sold</option><option>Gifted</option><option>Lost</option>
           </select>
         </label>
       </div>

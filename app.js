@@ -146,8 +146,12 @@ async function loadToday(){
       ${tile("Ready to sell", ready, 'Ready to Sell', 'Botanical Reverie')}
       ${tile("Mother plants", mothers, 'Mother Plant', 'Botanical Reverie')}
     </div>
-    ${(homeCount||lauraCount)?`<div class="muted" style="font-size:12px;margin-top:10px;letter-spacing:.03em;">＋ personal plants on the same care schedule, kept off the books:
-      ${homeCount?`<a style="cursor:pointer;color:var(--gold);" onclick="selectCollection('all','Michi')">${homeCount} of yours</a>`:''}${(homeCount&&lauraCount)?' · ':''}${lauraCount?`<a style="cursor:pointer;color:var(--gold);" onclick="selectCollection('all','Laura')">${lauraCount} of Laura’s</a>`:''}</div>`:''}
+    ${(homeCount||lauraCount)?`
+    <div class="label flank" style="justify-content:flex-start;margin-top:18px;">Personal — same care, off the books</div>
+    <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr));margin-top:10px;">
+      ${homeCount?tile("Michi’s plants", homeCount, 'all', 'Michi', 'personal'):''}
+      ${lauraCount?tile("Laura’s plants", lauraCount, 'all', 'Laura', 'personal'):''}
+    </div>`:''}
     <div class="section-t"><div class="label flank" style="justify-content:flex-start;">LINNAEUS — TODAY</div>
       <div style="margin-top:10px;"><button type="button" class="btn btn-sm btn-gold" onclick="todayBrief()">✦ What needs attention</button></div>
       <div id="ai-today" class="roomnote" style="display:none;margin-top:10px;white-space:pre-wrap;"></div>
@@ -178,9 +182,9 @@ function shortWhen(iso){
   if(diff<86400) return Math.floor(diff/3600)+"h ago";
   return d.toLocaleDateString(undefined,{month:"short",day:"numeric"});
 }
-function tile(label,val,action,world){
+function tile(label,val,action,world,cls){
   const click = action ? `onclick="selectCollection('${action}',${world!==undefined?`'${world}'`:'undefined'})" style="cursor:pointer;"` : `style="cursor:default;"`;
-  return `<div class="card stat" ${click}><div class="body">
+  return `<div class="card stat${cls?' '+cls:''}" ${click}><div class="body">
     <div class="label">${label}</div>
     <div style="font-family:'Cormorant Garamond',serif;font-size:34px;color:var(--cream);margin-top:6px;">${val}</div>
   </div></div>`;
@@ -254,11 +258,11 @@ const ACQ = {
   "Tissue culture":      {mother:false, vendor:true,  needMother:false, needVendor:true},
   "Cutting":             {mother:true,  vendor:true,  needMother:false, needVendor:false, oneOf:true},
   "Division":            {mother:true,  vendor:false, needMother:true,  needVendor:false},
-  "Our own propagation": {mother:true,  vendor:false, needMother:true,  needVendor:false},
+  "Propagation":         {mother:true,  vendor:false, needMother:true,  needVendor:false},
 };
 const ZONES = ["Rack 1","Rack 2","Rack 3","Hoya Bench (south window)","Glass case (velvet aroids)","Quarantine","Outdoors (aloe)","Other"];
 const SHELVES = ["Shelf 1 — top (low light / storage)","Shelf 2 (grow light)","Shelf 3 (grow light)","Shelf 4 (grow light)","Shelf 5 (grow light)"];
-const POTS = ["Clear glass","Weathered terracotta","Matte black","Clear plastic (nursery)","Net pot (semi-hydro)","Other"];
+const POTS = ["Clear glass","Glass jar / vase (water)","Weathered terracotta","Matte black","Porcelain / ceramic","Rectangle pot","Shallow planter","Metal pot","Wood","Peat pot","Grow bag","Propagation vial","Clear plastic (nursery)","Net pot (semi-hydro)","No pot","Other"];
 const CONDS = ["Healthy","Minor stress","Rootbound","Dehydrated","Pest seen","Disease seen","Shipping damage","Other"];
 const ADMIN_EMAILS = ["hello@botanicalreverie.com"];   // logins with admin access (pricing + Admin tab). Add emails here to grant.
 function isAdmin(){ return ADMIN_EMAILS.indexOf((window.MY_EMAIL||"").toLowerCase())>=0; }
@@ -632,8 +636,8 @@ function roomCareNote(p){
 }
 function storyLine(p){
   var yr = p.date_entered ? new Date(p.date_entered).getFullYear() : null;
-  if(p.mother_id) return "Of the "+(p.house||"founding")+" line — propagated and grown slowly in our Houston study, tended and photographed with care.";
-  return "Founder of the "+(p.house||"")+" line"+(yr?", established "+yr:"")+" — grown slowly in our Houston study, tended with care.";
+  if(p.mother_id) return "Of the "+(p.house||"founding")+" line — propagated and grown slowly in our plant observatory, tended and photographed with care.";
+  return "Founder of the "+(p.house||"")+" line"+(yr?", established "+yr:"")+" — grown slowly in our plant observatory, tended with care.";
 }
 function tendedSummary(care){
   if(!care||!care.length) return '';
@@ -1497,7 +1501,7 @@ function escAttr(v){ return (v==null?'':String(v)).replace(/"/g,'&quot;'); }
 function escHtml(v){ return (v==null?'':String(v)).replace(/</g,'&lt;'); }
 window.editPlant = function(){
   var p = window.CURRENT_PLANT; if(!p) return;
-  var statuses = ["In Collection","Quarantine","Mother Plant","Propagating","Ready to Sell","Listed","Reserved","Sold","Gifted","Lost"];
+  var statuses = ["In Collection","Quarantine","Mother Plant","Propagating","Ready to Sell","Listed","Reserved","Not for sale","Sold","Gifted","Lost"];
   $("plant-body").innerHTML = `
     <div class="view-head"><h2 style="font-size:24px;">Edit plant</h2></div>
     <label class="field">Our name<input id="e-name" value="${escAttr(p.unique_name)}" /></label>
