@@ -129,6 +129,8 @@ async function loadToday(){
   const recent = recentRes.data || [];
   let review=[];
   try{ const rr=await sb.from("plant").select("id,unique_name,common_name,botanical_name").eq("needs_id_review",true).limit(20); review=rr.data||[]; }catch(e){}
+  let pendingMothers=[];
+  try{ const pm=await sb.from("plant").select("id,unique_name,common_name,botanical_name").eq("mother_pending",true).limit(30); pendingMothers=pm.data||[]; }catch(e){}
   const wateredRes = await sb.from("care_log").select("plant_id,done_at").eq("action","Watered");
   const lastW = {};
   (wateredRes.data||[]).forEach(w=>{ const t=new Date(w.done_at).getTime(); if(!lastW[w.plant_id]||t>lastW[w.plant_id]) lastW[w.plant_id]=t; });
@@ -158,6 +160,9 @@ async function loadToday(){
     </div>
     ${review.length?`<div class="section-t"><div class="label flank" style="justify-content:flex-start;">NEEDS ID — LINNAEUS FLAGGED (${review.length})</div>
       <div style="margin-top:10px;">${review.map(r=>`<div onclick="openPlant('${r.id}')" style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:9px 0;font-size:14px;cursor:pointer;"><span><span class="dot"></span> ${r.unique_name||r.common_name||'Unnamed'}</span><span class="muted" style="font-size:11px;">${r.botanical_name||'no species'} · tap to fix</span></div>`).join('')}</div></div>`:''}
+    ${pendingMothers.length?`<div class="section-t"><div class="label flank" style="justify-content:flex-start;color:var(--garnet-bright);">MOTHERS TO LINK (${pendingMothers.length})</div>
+      <div class="fnote" style="margin-top:6px;">Propagated plants waiting for their mother to be linked — tap to finish the lineage.</div>
+      <div style="margin-top:8px;">${pendingMothers.map(r=>`<div onclick="openPlant('${r.id}')" style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:9px 0;font-size:14px;cursor:pointer;"><span><span class="dot" style="background:var(--garnet-bright);"></span> ${r.unique_name||r.common_name||'Unnamed'}</span><span class="muted" style="font-size:11px;">${r.botanical_name||''} · link mother</span></div>`).join('')}</div></div>`:''}
     <div class="section-t"><div class="label flank" style="justify-content:flex-start;">CHECK &amp; WATER</div>
       <div style="margin-top:10px;">${ needs.length ? needs.slice(0,12).map(x=>`
         <div onclick="openPlant('${x.p.id}')" style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:9px 0;font-size:14px;cursor:pointer;">
@@ -264,6 +269,13 @@ const ZONES = ["Rack 1","Rack 2","Rack 3","Hoya Bench (south window)","Glass cas
 const SHELVES = ["Shelf 1 — top (low light / storage)","Shelf 2 (grow light)","Shelf 3 (grow light)","Shelf 4 (grow light)","Shelf 5 (grow light)"];
 const POTS = ["Clear glass","Glass jar / vase (water)","Weathered terracotta","Matte black","Porcelain / ceramic","Rectangle pot","Shallow planter","Metal pot","Wood","Peat pot","Grow bag","Propagation vial","Clear plastic (nursery)","Net pot (semi-hydro)","No pot","Other"];
 const CONDS = ["Healthy","Minor stress","Rootbound","Dehydrated","Pest seen","Disease seen","Shipping damage","Other"];
+// Wave 2 intake option lists
+const PLACES = ["Botanical Reverie — grow room","Michi’s house","Laura’s house","Other"];
+const HOUSE_ROOMS = ["Bedroom","Living room","Kitchen","Study","Hall","Grow room","Back porch","Front porch","Quarantine","Other"];
+const SIZE_STAGES = ["Baby","Plantlet","New leaf","New shoots","Big leaves","Flowering","Done flowering"];
+const LAST_REPOTTED = ["Nursery pot — new","Last 7 days","About a month ago","3–6 months ago","A year or more","Unknown"];
+const LIGHT_TYPES = ["Grow light","Full sun","Part sun / part shade","Shade only","Dark"];
+const LAST_WATERED = ["Today","Yesterday","A week ago","About a week ago","2 weeks ago","Not sure"];
 const ADMIN_EMAILS = ["hello@botanicalreverie.com"];   // logins with admin access (pricing + Admin tab). Add emails here to grant.
 function isAdmin(){ return ADMIN_EMAILS.indexOf((window.MY_EMAIL||"").toLowerCase())>=0; }
 let condSel = new Set();
@@ -323,8 +335,9 @@ function fillSelect(id, arr, placeholder){
   s.innerHTML = (placeholder?`<option value="">${placeholder}</option>`:"") + arr.map(v=>`<option>${v}</option>`).join("");
 }
 function resetAddVis(){
-  ["f-cond-other","f-cond-quar","f-zone-other","f-shelf-wrap","f-pot-other","f-addname","f-vdup","f-name-sug","f-inherit","f-recipe","f-cult-add","f-photo-note","f-verify-note","f-id-suggest","f-collection-note"].forEach(id=>{ const e=$(id); if(e) e.style.display="none"; });
+  ["f-cond-other","f-cond-quar","f-zone-other","f-shelf-wrap","f-pot-other","f-addname","f-vdup","f-name-sug","f-inherit","f-recipe","f-cult-add","f-photo-note","f-verify-note","f-id-suggest","f-collection-note","f-mother-later-note","f-lighthours-wrap"].forEach(id=>{ const e=$(id); if(e) e.style.display="none"; });
   const vs=$("f-vsug"); if(vs){ vs.classList.remove("open"); vs.innerHTML=""; }
+  const ml=$("f-mother"); if(ml) ml.disabled=false;
 }
 
 async function setupAddForm(){
@@ -335,9 +348,15 @@ async function setupAddForm(){
   const ppr=$("f-photo-prompt"); if(ppr) ppr.style.display="block";
   const pz=$("f-photo-zone"); if(pz) pz.classList.remove("bad");
   $("f-date").value = new Date().toISOString().slice(0,10);
-  fillSelect("f-zone", ZONES, "— Select a zone —");
+  fillSelect("f-place", PLACES, "— Select —");
+  $("f-place").value = "Botanical Reverie — grow room";
+  applyPlace();
   fillSelect("f-shelf", SHELVES, "— Select a shelf —");
   fillSelect("f-pot", POTS, "— Select a pot —");
+  fillSelect("f-size", SIZE_STAGES, "— Select —");
+  fillSelect("f-watered", LAST_WATERED, "— Select —");
+  fillSelect("f-repotted", LAST_REPOTTED, "— Select —");
+  fillSelect("f-light", LIGHT_TYPES, "— Select —");
   $("f-cond-chips").innerHTML = CONDS.map(c=>`<span class="chip pick" data-c="${c}">${c}</span>`).join("");
   condSel = new Set();
   await loadCatalog();
@@ -358,7 +377,21 @@ function applyAcq(t){
   $("f-mother-wrap").style.display = (cfg&&cfg.mother)?"block":"none";
   $("f-vendor-wrap").style.display = (cfg&&cfg.vendor)?"block":"none";
   if(cfg&&cfg.needMother) $("f-status").value="Propagating";
-  if(!cfg||!cfg.mother){ $("f-mother").value=""; $("f-inherit").style.display="none"; }
+  if(!cfg||!cfg.mother){ $("f-mother").value=""; $("f-inherit").style.display="none"; const ml=$("f-mother-later"); if(ml) ml.checked=false; const mln=$("f-mother-later-note"); if(mln) mln.style.display="none"; }
+}
+// Location: the room/zone list depends on which place (grow room vs a house)
+function applyPlace(){
+  const place=$("f-place")?$("f-place").value:"";
+  if(place==="Other"){ fillSelect("f-zone", ["Other"], "— Select —"); }
+  else if(/grow room/i.test(place)){ fillSelect("f-zone", ZONES, "— Select a zone —"); }
+  else if(place){ fillSelect("f-zone", HOUSE_ROOMS, "— Select a room —"); }
+  else { fillSelect("f-zone", [], "— Select —"); }
+  onZone();
+}
+function onZone(){
+  const z=$("f-zone")?$("f-zone").value:"";
+  const sw=$("f-shelf-wrap"); if(sw) sw.style.display = /^Rack/.test(z)?"block":"none";
+  const zo=$("f-zone-other"); if(zo) zo.style.display = z==="Other"?"block":"none";
 }
 
 async function loadVendors(){
@@ -450,7 +483,9 @@ async function saveNewName(){
 
 function wireAddForm(){
   const fc=$("f-collection");
-  if(fc) fc.addEventListener("change", ()=>{ const n=$("f-collection-note"); if(n) n.style.display = (fc.value&&fc.value!=="Botanical Reverie")?"block":"none"; });
+  if(fc) fc.addEventListener("change", ()=>{ const n=$("f-collection-note"); if(n) n.style.display = (fc.value&&fc.value!=="Botanical Reverie")?"block":"none";
+    // default the location to whoever's plant it is
+    const pl=$("f-place"); if(pl){ if(fc.value==="Michi") pl.value="Michi’s house"; else if(fc.value==="Laura") pl.value="Laura’s house"; else pl.value="Botanical Reverie — grow room"; applyPlace(); } });
   $("f-acqtype").addEventListener("change", e=>applyAcq(e.target.value));
   $("f-botanical").addEventListener("change", onBotanical);
   $("f-medium").addEventListener("change", ()=>showRecipe($("f-medium").value));
@@ -465,10 +500,14 @@ function wireAddForm(){
     if(quar) $("f-status").value="Quarantine";
     addDraftSave();
   });
-  $("f-zone").addEventListener("change", ()=>{
-    const z=$("f-zone").value;
-    $("f-shelf-wrap").style.display = /^Rack/.test(z)?"block":"none";
-    $("f-zone-other").style.display = z==="Other"?"block":"none";
+  $("f-place").addEventListener("change", applyPlace);
+  $("f-zone").addEventListener("change", onZone);
+  $("f-light").addEventListener("change", ()=>{ const w=$("f-lighthours-wrap"); if(w) w.style.display = $("f-light").value==="Grow light"?"block":"none"; });
+  const ml=$("f-mother-later");
+  if(ml) ml.addEventListener("change", ()=>{
+    const on=ml.checked, note=$("f-mother-later-note"), msel=$("f-mother");
+    if(note) note.style.display = on?"block":"none";
+    if(msel){ msel.disabled = on; if(on){ msel.value=""; const inh=$("f-inherit"); if(inh) inh.style.display="none"; } }
   });
   $("f-pot").addEventListener("change", ()=>{ $("f-pot-other").style.display = $("f-pot").value==="Other"?"block":"none"; });
   const vn=$("f-srcname"), vs=$("f-vsug");
@@ -539,6 +578,7 @@ async function submitAdd(e){
   if(!$("f-status").value) bad.push("f-status");
   const condOther=condSel.has("Other");
   if(condOther && !$("f-cond-other").value.trim()) bad.push("f-cond-other");
+  const place=$("f-place").value; if(!place) bad.push("f-place");
   const zone=$("f-zone").value; if(!zone) bad.push("f-zone");
   if(zone==="Other" && !$("f-zone-other").value.trim()) bad.push("f-zone-other");
   if(/^Rack/.test(zone) && !$("f-shelf").value) bad.push("f-shelf");
@@ -546,11 +586,12 @@ async function submitAdd(e){
   if(pot==="Other" && !$("f-pot-other").value.trim()) bad.push("f-pot-other");
   if(!$("f-medium").value) bad.push("f-medium");
   if(!$("f-date").value) bad.push("f-date");
+  const motherLater=$("f-mother-later")&&$("f-mother-later").checked;
   const motherId=$("f-mother").value, vendorName=$("f-srcname").value.trim();
   if(cfg){
-    if(cfg.needMother && !motherId) bad.push("f-mother");
+    if(cfg.needMother && !motherId && !motherLater) bad.push("f-mother");
     if(cfg.needVendor && !vendorName) bad.push("f-srcname");
-    if(cfg.oneOf && !motherId && !vendorName){ bad.push("f-mother"); bad.push("f-srcname"); }
+    if(cfg.oneOf && !motherId && !vendorName && !motherLater){ bad.push("f-mother"); bad.push("f-srcname"); }
   }
   if(bad.length || condSel.size===0){
     bad.forEach(markBad);
@@ -562,8 +603,11 @@ async function submitAdd(e){
     return;
   }
   m.textContent="Adding…";
-  let loc = zone==="Other" ? $("f-zone-other").value.trim() : zone;
-  if(/^Rack/.test(zone)) loc = zone+" · "+$("f-shelf").value;
+  // compose location: place · zone (· shelf), keeping the place prefix only when it's not the default grow room
+  let zonePart = zone==="Other" ? $("f-zone-other").value.trim() : zone;
+  if(/^Rack/.test(zone)) zonePart = zone+" · "+$("f-shelf").value;
+  const placePrefix = /grow room/i.test(place) ? "" : (place==="Other" ? "" : place+" · ");
+  let loc = placePrefix + zonePart;
   const potv = pot==="Other" ? $("f-pot-other").value.trim() : pot;
   const conds=[...condSel].filter(c=>c!=="Other");
   if(condOther) conds.push($("f-cond-other").value.trim());
@@ -573,10 +617,16 @@ async function submitAdd(e){
     unique_name:$("f-name").value.trim(), status:$("f-status").value,
     collection:($("f-collection")&&$("f-collection").value)||"Botanical Reverie",
     botanical_name:bot, common_name:val("f-common"), cultivar:cultivar||null,
-    mother_id:(cfg&&cfg.mother&&motherId)?motherId:null,
+    mother_id:(cfg&&cfg.mother&&motherId&&!motherLater)?motherId:null,
+    mother_pending: !!(cfg&&cfg.mother&&motherLater),
     date_entered:$("f-date").value||null, acquisition_type:t,
     condition_at_intake:conds.join(", ")||null,
-    location_zone:loc, pot_type:potv, medium:val("f-medium"), notes:val("f-notes"),
+    location_zone:loc, pot_type:potv, pot_size:val("f-potsize"), has_drainage:val("f-drainage"),
+    last_repotted:val("f-repotted"), medium:val("f-medium"),
+    size_stage:val("f-size"), last_watered_bucket:val("f-watered"),
+    light_type:val("f-light"), light_hours:val("f-lighthours"), light_distance:val("f-lightdist"),
+    near_vent: $("f-vent")? ($("f-vent").value==="Yes") : false,
+    notes:val("f-notes"),
   };
   if(cfg&&cfg.vendor&&vendorName){
     rec.source_name=vendorName; rec.source_phone=val("f-srcphone"); rec.source_website=val("f-srcweb"); rec.source_address=val("f-srcaddr");
@@ -660,19 +710,27 @@ function renderPlant(p, mother, kids, care, photos, health){
   const idbits=[];
   if(p.common_name) idbits.push(`<div class="id-common"><span class="id-lbl">Common</span><span class="id-cname">${p.common_name}</span></div>`);
   if(p.botanical_name) idbits.push(`<div class="id-species"><span class="id-lbl">Species</span><i class="id-sname">${p.botanical_name}</i></div>`);
+  const lightStr=[p.light_type, p.light_hours, p.light_distance, p.near_vent?"near a vent":null].filter(Boolean).join(" · ");
+  const potStr=[p.pot_type, p.pot_size].filter(Boolean).join(" · ");
   const specs=[
     ["Date entered", p.date_entered],
     ["Acquired as", p.acquisition_type],
     ["Source", p.source_name],
     (isAdmin()&&p.acquisition_cost!=null)?["Cost", money(p.acquisition_cost)]:null,
-    ["Zone", p.location_zone],
-    ["Pot", p.pot_type],
+    ["Location", p.location_zone],
+    ["Size / stage", p.size_stage],
+    ["Pot", potStr],
+    ["Drainage", p.has_drainage],
+    ["Last repotted", p.last_repotted],
     ["Soil", p.medium],
+    ["Light", lightStr],
+    ["Last watered", p.last_watered_bucket],
     (isAdmin()&&p.current_value!=null)?["Value", money(p.current_value)]:null,
   ].filter(s=>s && s[1]);
   $("plant-body").innerHTML = `
     <div style="display:flex;gap:8px;align-items:center;margin:6px 0 16px;"><button class="btn btn-sm" onclick="go('collection')">‹ Back</button><button class="btn btn-sm" onclick="editPlant()">Edit</button><span style="flex:1;"></span><button class="btn btn-sm" onclick="askDelete()" style="border-color:var(--garnet);color:var(--garnet-bright);">Delete</button></div>
     ${p.needs_id_review?renderResolve(p):''}
+    ${p.mother_pending?renderMotherPending(p):''}
     <div class="ghero" ${coverBg} ${p.cover_photo_url?`onclick="openZoom('${p.cover_photo_url}')"`:''}>
       <div class="greg">Reverie Registry № BR-${pad(p.plant_no)}</div>
       ${p.cover_photo_url?'':'<div class="gglyph">❦</div>'}
@@ -875,6 +933,31 @@ function computeIdFlag(bot){
   return false;
 }
 
+/* ----- Mother "add later" — persistent reminder + link flow ----- */
+function renderMotherPending(p){
+  const opts = (CACHE||[]).filter(x=>x.id!==p.id && (x.collection||'Botanical Reverie')==='Botanical Reverie' && !x.mother_pending)
+    .map(x=>`<option value="${x.id}">${escAttr(x.unique_name||x.common_name||'Unnamed')} (${lineageCode(x)})</option>`).join('');
+  return '<div class="section-t"><div class="roomnote" style="border-left-color:var(--garnet);">'
+    +'<div class="label" style="color:var(--garnet-bright);margin-bottom:8px;">⚠ Mother not yet linked</div>'
+    +'<div style="font-size:12px;margin-bottom:8px;">This was propagated but its mother wasn’t in the system yet. Link it to complete the lineage.</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
+    +'<select id="link-mother-sel" style="flex:1;min-width:180px;margin:0;"><option value="">— Select the mother —</option>'+opts+'</select>'
+    +'<button type="button" class="btn btn-sm btn-gold" onclick="doLinkMother(\''+p.id+'\')">Link</button>'
+    +'</div></div></div>';
+}
+window.doLinkMother = async function(id){
+  const sel=$("link-mother-sel"); const motherId=sel?sel.value:"";
+  if(!motherId){ toast("Pick the mother first."); return; }
+  const mom=(CACHE||[]).find(x=>x.id===motherId); if(!mom){ toast("Mother not found."); return; }
+  // replicate the insert trigger's lineage math, since it only runs on insert
+  let sib=1; try{ const {count}=await sb.from("plant").select("id",{count:'exact',head:true}).eq("mother_id",motherId); sib=(count||0)+1; }catch(e){}
+  const upd={ mother_id:motherId, mother_pending:false, house:mom.house, generation:(mom.generation||1)+1, founder_id:mom.founder_id||mom.id, sibling_index:sib };
+  const {error}=await sb.from("plant").update(upd).eq("id",id);
+  if(error){ toast("Couldn’t link: "+error.message); return; }
+  toast("Mother linked — lineage completed.");
+  await fetchPlants(); openPlant(id);
+};
+
 /* ----- Resolve a flagged plant (the "needs attention" fix flow) ----- */
 function renderResolve(p){
   const cands=(p.ai_suggestion && Array.isArray(p.ai_suggestion.candidates))? p.ai_suggestion.candidates : [];
@@ -921,7 +1004,7 @@ async function idbDelPhoto(){ try{ const db=await idbOpen(); return await new Pr
 function addDraftSave(){
   const f=$("add-form"); if(!f) return;
   const d={};
-  f.querySelectorAll("input,select,textarea").forEach(el=>{ if(el.type==="file"||!el.id) return; d[el.id]=el.value; });
+  f.querySelectorAll("input,select,textarea").forEach(el=>{ if(el.type==="file"||!el.id) return; d[el.id]= el.type==="checkbox"? el.checked : el.value; });
   d.__cond=[...condSel];
   d.__identify=window.__lastIdentify||null;
   d.__hasPhoto=!!addPhotoFile;
@@ -933,11 +1016,14 @@ async function addDraftRestore(){
   let d; try{ d=JSON.parse(localStorage.getItem("br_add_draft")||"null"); }catch(e){ d=null; }
   if(!d) return false;
   if(d["f-botanical"]) ensureBotanical(d["f-botanical"]);
-  Object.keys(d).forEach(k=>{ if(k.indexOf("__")===0) return; const el=$(k); if(el) el.value=d[k]; });
+  Object.keys(d).forEach(k=>{ if(k.indexOf("__")===0) return; const el=$(k); if(!el) return; if(el.type==="checkbox") el.checked=!!d[k]; else el.value=d[k]; });
   applyAcq(d["f-acqtype"]||"");
-  if(/^Rack/.test(d["f-zone"]||"")) $("f-shelf-wrap").style.display="block";
-  if(d["f-zone"]==="Other") $("f-zone-other").style.display="block";
+  // rebuild the room list from the saved place, then re-apply the saved room
+  if(d["f-place"]){ const pl=$("f-place"); if(pl){ pl.value=d["f-place"]; applyPlace(); if(d["f-zone"]) $("f-zone").value=d["f-zone"]; } }
+  onZone();
   if(d["f-pot"]==="Other") $("f-pot-other").style.display="block";
+  if(d["f-light"]==="Grow light"){ const w=$("f-lighthours-wrap"); if(w) w.style.display="block"; }
+  { const ml=$("f-mother-later"); if(ml&&ml.checked){ const note=$("f-mother-later-note"); if(note) note.style.display="block"; const msel=$("f-mother"); if(msel){ msel.disabled=true; msel.value=""; } } }
   condSel=new Set(d.__cond||[]);
   [...$("f-cond-chips").children].forEach(c=>{ if(condSel.has(c.dataset.c)) c.classList.add("on"); });
   if(condSel.has("Other")) $("f-cond-other").style.display="block";
@@ -1248,7 +1334,14 @@ const SOILS = {
   "Alocasia Mix":"House Mix + ½ part extra coco coir for steady moisture (never soggy). Keep airflow strong; mite-prone.",
   "Hoya / Epiphyte Mix":"Chunkier & faster-draining — more bark/perlite, less coir, skip the worm castings. They rot if kept damp.",
   "Semi-Hydro — LECA":"Inert clay pebbles in net pots; weak constant feed in the reservoir (~⅛–¼ tsp/gal), refreshed weekly.",
-  "Semi-Hydro — Lechuza Pon":"Pumice/zeolite/lava blend, lightly pre-charged. Reservoir feeding; great for high-value specimens & imports."
+  "Semi-Hydro — Lechuza Pon":"Pumice/zeolite/lava blend, lightly pre-charged. Reservoir feeding; great for high-value specimens & imports.",
+  "Water (glass / hydroponic)":"Rooted in plain water — glass vessel, no soil. Change water weekly, keep roots submerged & stems dry, add a weak hydroponic feed (~⅛ tsp/gal). Watch for algae; rinse the glass.",
+  "Standard potting soil":"Store-bought all-purpose potting mix. Holds more moisture than the House Mix — water a touch less often and check it isn't staying soggy.",
+  "Potting soil + perlite":"Standard potting soil lightened with perlite for faster drainage — a safe middle ground for most houseplants.",
+  "Cactus / succulent mix":"Fast-draining gritty mix for succulents, cacti & sansevieria. Let it dry fully between waterings.",
+  "Orchid bark mix":"Chunky bark for epiphytes & orchids — very airy, dries fast, needs more frequent watering.",
+  "Sphagnum moss":"Pure long-fiber moss — for props, rooting & thin-rooted aroids. Stays moist; squeeze out excess, never waterlogged.",
+  "Other":"Not a standard mix — note what it is in Notes and Linnaeus will weigh in."
 };
 let SPECIES = [];
 async function loadCatalog(){
