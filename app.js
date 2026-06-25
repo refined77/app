@@ -672,8 +672,9 @@ window.openPlant = async function(id){
   const {data:care} = await sb.from("care_log").select("*").eq("plant_id",id).order("done_at",{ascending:false}).limit(8);
   const {data:photos} = await sb.from("photo").select("*").eq("plant_id",id).order("created_at",{ascending:false});
   const {data:health} = await sb.from("health_log").select("*").eq("plant_id",id).order("created_at",{ascending:false});
+  let chats=[]; try{ const ch=await sb.from("chat_log").select("role,content,user_name,created_at").eq("plant_id",id).order("created_at",{ascending:true}).limit(40); chats=ch.data||[]; }catch(e){}
   const mother = p.mother_id? CACHE.find(x=>x.id===p.mother_id) : null;
-  renderPlant(p, mother, kids||[], care||[], photos||[], health||[]);
+  renderPlant(p, mother, kids||[], care||[], photos||[], health||[], chats);
 };
 /* ---------- Grow-room brain (knowledge layer) ---------- */
 function roomCareNote(p){
@@ -698,7 +699,7 @@ function tendedSummary(care){
   const r=care[0]; if(r) out.push('Last tended <span class="tg">'+shortWhen(r.done_at)+'</span>');
   return out.join(' &nbsp;·&nbsp; ');
 }
-function renderPlant(p, mother, kids, care, photos, health){
+function renderPlant(p, mother, kids, care, photos, health, chats){
   window.CURRENT_PLANT = p;
   const coverBg = p.cover_photo_url? `style="background-image:url('${p.cover_photo_url}');cursor:pointer;"` : "";
   const coll = p.collection||"Botanical Reverie";
@@ -763,8 +764,9 @@ function renderPlant(p, mother, kids, care, photos, health){
 
     <div class="section-t">
       <div class="label flank">Ask Linnaeus</div>
+      <div id="plant-chat-history" style="max-width:560px;margin:10px auto 0;">${renderPlantChatHistory(chats)}</div>
       <div style="margin-top:10px;display:flex;gap:8px;max-width:560px;margin-left:auto;margin-right:auto;">
-        <input id="ai-q" placeholder="What does this plant need right now?" style="flex:1;" />
+        <input id="ai-q" placeholder="Ask about this plant — saved with it." style="flex:1;" />
         <button type="button" class="btn btn-sm btn-gold" onclick="askPlant()">✦ Ask</button>
       </div>
       <div id="ai-ans" class="roomnote" style="display:none;margin:10px auto 0;max-width:560px;white-space:pre-wrap;"></div>
@@ -833,7 +835,8 @@ async function askLinnaeus(payload){
   }catch(e){ return {error:"Couldn't reach Linnaeus (is the app deployed?)."}; }
 }
 /* ----- Linnaeus chat (floating sparkle button → in-app conversation, with photos) ----- */
-let CHAT=[]; let chatWired=false; let chatImg=null;
+let CHAT=[]; let chatWired=false; let chatImgs=[];
+const CHAT_MAX_PHOTOS=6;
 function chatEscape(t){ return String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
 function chatMd(t){ let s=chatEscape(t);
   s=s.replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>");
@@ -844,38 +847,55 @@ function chatBubble(role,text){ const log=$("chat-log"); const d=document.create
   d.className="cmsg "+(role==="user"?"user":"bot"); d.innerHTML=text?chatMd(text):""; log.appendChild(d); chatScroll(); return d; }
 function chatGreeting(){ $("chat-log").innerHTML='<div class="cmsg bot">Hello, Michi. I’m Linnaeus — your botanist on call. Ask me about any specimen, the grow room, quarantine, the soil mixes, even brand voice. Tap the camera to show me a photo. What do you need?</div>'; }
 function showAttachPreview(){ const p=$("chat-attach-preview"); if(!p) return;
-  if(!chatImg){ p.classList.add("hidden"); p.innerHTML=""; return; }
-  p.classList.remove("hidden"); p.innerHTML='<img src="'+chatImg.url+'" alt=""><span class="x" onclick="clearChatImg()">Remove photo &times;</span>'; }
-window.clearChatImg=function(){ chatImg=null; showAttachPreview(); };
+  if(!chatImgs.length){ p.classList.add("hidden"); p.innerHTML=""; return; }
+  p.classList.remove("hidden");
+  p.innerHTML = chatImgs.map(function(im,i){ return '<span class="att"><img src="'+im.url+'" alt=""><span class="x" onclick="removeChatImg('+i+')">&times;</span></span>'; }).join("")
+    + (chatImgs.length>1?'<span class="x" style="align-self:center;" onclick="clearChatImg()">Remove all &times;</span>':''); }
+window.removeChatImg=function(i){ chatImgs.splice(i,1); showAttachPreview(); };
+window.clearChatImg=function(){ chatImgs=[]; showAttachPreview(); };
 function loadChat(){
   if(!chatWired){ chatWired=true;
     $("chat-send").onclick=sendChat;
     $("chat-input").addEventListener("keydown",function(e){ if(e.key==="Enter"){ e.preventDefault(); sendChat(); } });
     var bindPick=function(inp){ if(!inp) return; inp.onchange=async function(){ const f=this.files&&this.files[0]; this.value=""; if(!f) return;
+        if(chatImgs.length>=CHAT_MAX_PHOTOS){ toast("Up to "+CHAT_MAX_PHOTOS+" photos at a time."); return; }
         const img=await fileToB64(f); if(!img){ return; }
-        chatImg={b64:img.b64,media:img.media,url:"data:"+img.media+";base64,"+img.b64}; showAttachPreview(); }; };
+        chatImgs.push({b64:img.b64,media:img.media,url:"data:"+img.media+";base64,"+img.b64}); showAttachPreview(); }; };
     bindPick($("chat-file")); bindPick($("chat-camera"));
   }
-  if(!CHAT.length) chatGreeting();
+  if(!CHAT.length) loadChatHistory();
   setTimeout(function(){ var i=$("chat-input"); if(i) i.focus(); },60);
+}
+async function logChat(plantId, role, content){
+  if(!content) return;
+  try{ await sb.from("chat_log").insert({plant_id:plantId||null, user_email:window.MY_EMAIL||null, user_name:window.ME||null, role:role, content:String(content).slice(0,8000)}); }catch(e){}
+}
+async function loadChatHistory(){
+  let rows=[];
+  try{ const r=await sb.from("chat_log").select("role,content,created_at").is("plant_id",null).eq("user_email",window.MY_EMAIL||"").order("created_at",{ascending:false}).limit(20); rows=(r.data||[]).reverse(); }catch(e){}
+  if(!rows.length){ chatGreeting(); return; }
+  $("chat-log").innerHTML="";
+  rows.forEach(function(m){ CHAT.push({role:m.role,content:m.content}); chatBubble(m.role==="user"?"user":"bot", m.content); });
 }
 async function sendChat(){
   const input=$("chat-input"); const text=(input.value||"").trim();
-  if(!text && !chatImg) return;
+  if(!text && !chatImgs.length) return;
   input.value="";
   if(!CHAT.length) $("chat-log").innerHTML="";
-  const sentImg=chatImg; chatImg=null; showAttachPreview();
+  const sent=chatImgs.slice(); chatImgs=[]; showAttachPreview();
   CHAT.push({role:"user",content:text||"(photo)"});
   const ub=chatBubble("user",text);
-  if(sentImg){ const im=document.createElement("img"); im.className="shot"; im.src=sentImg.url; ub.insertBefore(im, ub.firstChild); chatScroll(); }
+  sent.forEach(function(im){ const el=document.createElement("img"); el.className="shot"; el.src=im.url; ub.insertBefore(el, ub.firstChild); });
+  if(sent.length) chatScroll();
   const thinking=chatBubble("bot","Linnaeus is thinking…"); thinking.style.opacity=".6";
   $("chat-send").disabled=true;
   const api=CHAT.slice(-24).map(function(m){ return {role:m.role,content:m.content}; });
-  if(sentImg && api.length){ const last=api[api.length-1];
-    last.content=[{type:"text",text:text||"Here's the photo."},{type:"image",source:{type:"base64",media_type:sentImg.media,data:sentImg.b64}}]; }
+  if(sent.length && api.length){ const last=api[api.length-1];
+    last.content=[{type:"text",text:text||"Here are the photos."}].concat(sent.map(function(im){ return {type:"image",source:{type:"base64",media_type:im.media,data:im.b64}}; })); }
+  logChat(null,"user",text||("(" + (sent.length?sent.length+" photo"+(sent.length>1?"s":""):"photo") + ")"));
   const res=await askLinnaeus({mode:"chat", messages:api});
   $("chat-send").disabled=false; if(thinking&&thinking.remove) thinking.remove();
-  if(res && res.text){ CHAT.push({role:"assistant",content:res.text}); chatBubble("bot",res.text); }
+  if(res && res.text){ CHAT.push({role:"assistant",content:res.text}); chatBubble("bot",res.text); logChat(null,"assistant",res.text); }
   else { chatBubble("bot",(res&&res.error)?res.error:"Something went wrong — try again."); }
   var i2=$("chat-input"); if(i2) i2.focus();
 }
@@ -1164,8 +1184,30 @@ window.askPlant=async function(){
   const ans=$("ai-ans"); ans.style.display="block"; ans.textContent="Linnaeus is thinking…";
   const p=window.CURRENT_PLANT||{};
   const v=await askLinnaeus({mode:"advise", plant:plantCtx(p), question:q, image_url:p.cover_photo_url||undefined});
-  ans.textContent=(v&&v.text)?v.text:(v&&v.error?("Linnaeus: "+v.error):"No answer.");
+  if(v && v.text){
+    ans.style.display="none"; ans.textContent="";
+    appendPlantChat(q, v.text);
+    $("ai-q").value="";
+    if(p.id){ logChat(p.id,"user",q); logChat(p.id,"assistant",v.text); }
+  } else {
+    ans.textContent = v&&v.error ? ("Linnaeus: "+v.error) : "No answer.";
+  }
 };
+function plantChatBubble(who, txt, isUser){
+  return '<div style="margin:0 0 10px;font-size:13px;line-height:1.55;'+(isUser?'color:var(--gold);':'color:var(--cream);')+'">'
+    +'<span class="muted" style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;display:block;margin-bottom:3px;">'+who+'</span>'
+    +chatMd(txt)+'</div>';
+}
+function renderPlantChatHistory(chats){
+  if(!chats || !chats.length) return "";
+  return '<div class="label flank" style="justify-content:flex-start;margin:0 0 10px;">Conversation</div>'
+    + chats.map(function(c){ return plantChatBubble(c.role==="user"?escHtml(c.user_name||"You"):"Linnaeus", c.content, c.role==="user"); }).join("");
+}
+function appendPlantChat(q, a){
+  const box=$("plant-chat-history"); if(!box) return;
+  if(!box.innerHTML.trim()) box.innerHTML='<div class="label flank" style="justify-content:flex-start;margin:0 0 10px;">Conversation</div>';
+  box.insertAdjacentHTML('beforeend', plantChatBubble(escHtml(window.ME||"You"), q, true) + plantChatBubble("Linnaeus", a, false));
+}
 window.diagnoseConcern=function(){
   const inp=document.createElement("input"); inp.type="file"; inp.accept="image/*";
   inp.onchange=async e=>{ const f=e.target.files&&e.target.files[0]; if(!f) return;
