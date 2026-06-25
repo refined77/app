@@ -47,6 +47,8 @@ function showApp(user){
   window.MY_EMAIL = user.email || "";
   $("who-name").textContent = window.ME;
   setupAdminNav();
+  if(!window.__loggedOpen){ window.__loggedOpen=true; logActivity("opened","opened the app"); }
+  wireActivity();
   go(startView());   // resume the last view if returning within 10 min, else Today
 }
 $("au-switch").onclick = (e)=>{ e.preventDefault(); signUpMode=!signUpMode;
@@ -139,6 +141,13 @@ async function loadToday(){
   const needs = active.map(p=>({p, days: lastW[p.id]? Math.floor((now-lastW[p.id])/DAY) : null}))
     .filter(x=> x.days===null || x.days>=7)
     .sort((a,b)=> (b.days===null?99999:b.days)-(a.days===null?99999:a.days));
+  // Photograph every 2 weeks — flag plants whose last photo is 14+ days old
+  let lastPhoto={};
+  try{ const phRes=await sb.from("photo").select("plant_id,created_at"); (phRes.data||[]).forEach(ph=>{ const t=new Date(ph.created_at).getTime(); if(!lastPhoto[ph.plant_id]||t>lastPhoto[ph.plant_id]) lastPhoto[ph.plant_id]=t; }); }catch(e){}
+  const PHOTO_DAYS=14;
+  const photosDue = active.map(p=>({p, days: lastPhoto[p.id]? Math.floor((now-lastPhoto[p.id])/DAY) : null}))
+    .filter(x=> x.days===null || x.days>=PHOTO_DAYS)
+    .sort((a,b)=> (b.days===null?99999:b.days)-(a.days===null?99999:a.days));
   window.__todaySummary = `Collection ${total} plants; quarantine ${quarantine}; ready to sell ${ready}; mother plants ${mothers}. Needs check/water (${needs.length}): ` + (needs.slice(0,10).map(x=>`${x.p.unique_name||x.p.common_name||'Unnamed'} (${x.days===null?'no water logged':x.days+'d since water'})`).join('; ')||'none') + '.';
   $("today-body").innerHTML = `
     <div class="grid" style="grid-template-columns:repeat(2,minmax(0,1fr));">
@@ -163,6 +172,8 @@ async function loadToday(){
     ${pendingMothers.length?`<div class="section-t"><div class="label flank" style="justify-content:flex-start;color:var(--garnet-bright);">MOTHERS TO LINK (${pendingMothers.length})</div>
       <div class="fnote" style="margin-top:6px;">Propagated plants waiting for their mother to be linked — tap to finish the lineage.</div>
       <div style="margin-top:8px;">${pendingMothers.map(r=>`<div onclick="openPlant('${r.id}')" style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:9px 0;font-size:14px;cursor:pointer;"><span><span class="dot" style="background:var(--garnet-bright);"></span> ${r.unique_name||r.common_name||'Unnamed'}</span><span class="muted" style="font-size:11px;">${r.botanical_name||''} · link mother</span></div>`).join('')}</div></div>`:''}
+    ${photosDue.length?`<div class="section-t"><div class="label flank" style="justify-content:flex-start;">PHOTOS DUE — EVERY 2 WEEKS (${photosDue.length})</div>
+      <div style="margin-top:8px;">${photosDue.slice(0,15).map(x=>`<div onclick="openPlant('${x.p.id}')" style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:9px 0;font-size:14px;cursor:pointer;"><span><span class="dot"></span> ${x.p.unique_name||x.p.common_name||'Unnamed'}</span><span class="muted" style="font-size:11px;">📷 ${x.days===null?'no photo yet':'last photo '+x.days+'d ago'}</span></div>`).join('')}</div></div>`:''}
     <div class="section-t"><div class="label flank" style="justify-content:flex-start;">CHECK &amp; WATER</div>
       <div style="margin-top:10px;">${ needs.length ? needs.slice(0,12).map(x=>`
         <div onclick="openPlant('${x.p.id}')" style="display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding:9px 0;font-size:14px;cursor:pointer;">
@@ -657,6 +668,7 @@ async function submitAdd(e){
   $("f-photo-preview").style.display="none"; $("f-photo-prompt").style.display="block";
   resetAddVis(); applyAcq("");
   toast((rec.unique_name||"Plant")+" entered the collection.");
+  logActivity("add_plant", rec.unique_name||"a plant");
   startCarePlan(data.id);   // Linnaeus reviews every intake and gives a care checklist
 }
 function val(id){ const v=$(id).value; return v&&v.trim()? v.trim():null; }
@@ -774,6 +786,7 @@ function renderPlant(p, mother, kids, care, photos, health, chats){
 
     <div class="section-t">
       <div class="label flank">Photographs</div>
+      ${photoDueNote(photos)}
       <div style="margin-top:10px;text-align:center;"><button type="button" class="btn btn-sm" onclick="addPhoto()">+ Add photo</button></div>
       <div style="margin-top:12px;">${renderPhotoGrid(photos)}</div>
     </div>
@@ -842,9 +855,24 @@ function chatMd(t){ let s=chatEscape(t);
   s=s.replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>");
   s=s.replace(/(^|[^*])\*([^*\n]+)\*/g,"$1<i>$2</i>");
   return s.replace(/\n/g,"<br>"); }
+/* Voice readback — free, uses the device's built-in speech (works on iPhone Safari). Tap to play, tap again to stop. */
+function stripForSpeech(t){ return String(t||"").replace(/[#*_`>•·]/g," ").replace(/\s+/g," ").trim(); }
+window.speak=function(text){
+  try{
+    if(!("speechSynthesis" in window)){ toast("Voice isn’t available on this device."); return; }
+    const synth=window.speechSynthesis;
+    if(synth.speaking){ synth.cancel(); return; }
+    const u=new SpeechSynthesisUtterance(stripForSpeech(text));
+    u.rate=0.98; u.pitch=1.0;
+    synth.speak(u);
+  }catch(e){}
+};
+function speakBtn(text){ return '<button type="button" class="speakbtn" title="Read aloud" onclick="speak(this.getAttribute(\'data-say\'))" data-say="'+escAttr(text)+'">🔊</button>'; }
 function chatScroll(){ const log=$("chat-log"); if(log) log.scrollTop=log.scrollHeight; }
-function chatBubble(role,text){ const log=$("chat-log"); const d=document.createElement("div");
-  d.className="cmsg "+(role==="user"?"user":"bot"); d.innerHTML=text?chatMd(text):""; log.appendChild(d); chatScroll(); return d; }
+function chatBubble(role,text,speakable){ const log=$("chat-log"); const d=document.createElement("div");
+  d.className="cmsg "+(role==="user"?"user":"bot"); d.innerHTML=text?chatMd(text):"";
+  if(speakable && text){ d.insertAdjacentHTML("beforeend", speakBtn(text)); }
+  log.appendChild(d); chatScroll(); return d; }
 function chatGreeting(){ $("chat-log").innerHTML='<div class="cmsg bot">Hello, Michi. I’m Linnaeus — your botanist on call. Ask me about any specimen, the grow room, quarantine, the soil mixes, even brand voice. Tap the camera to show me a photo. What do you need?</div>'; }
 function showAttachPreview(){ const p=$("chat-attach-preview"); if(!p) return;
   if(!chatImgs.length){ p.classList.add("hidden"); p.innerHTML=""; return; }
@@ -870,12 +898,29 @@ async function logChat(plantId, role, content){
   if(!content) return;
   try{ await sb.from("chat_log").insert({plant_id:plantId||null, user_email:window.MY_EMAIL||null, user_name:window.ME||null, role:role, content:String(content).slice(0,8000)}); }catch(e){}
 }
+
+/* ---------- Admin activity log (who did what, when, incl. opened/idle/returned) ---------- */
+async function logActivity(event, detail){
+  try{ await sb.from("activity_log").insert({event:event, detail:detail?String(detail).slice(0,300):null, user_email:window.MY_EMAIL||null, user_name:window.ME||null}); }catch(e){}
+}
+let __idleTimer=null, __isIdle=false, __activityWired=false;
+function bumpActivity(){
+  if(__isIdle){ __isIdle=false; logActivity("returned","active again"); }
+  clearTimeout(__idleTimer);
+  __idleTimer=setTimeout(function(){ __isIdle=true; logActivity("idle","no activity ~5 min"); }, 5*60*1000);
+}
+function wireActivity(){
+  if(__activityWired) return; __activityWired=true;
+  ["click","keydown","touchstart","scroll"].forEach(function(ev){ document.addEventListener(ev, bumpActivity, {passive:true}); });
+  document.addEventListener("visibilitychange", function(){ if(document.hidden){ logActivity("left","app backgrounded"); } else { logActivity("returned","app foregrounded"); bumpActivity(); } });
+  bumpActivity();
+}
 async function loadChatHistory(){
   let rows=[];
   try{ const r=await sb.from("chat_log").select("role,content,created_at").is("plant_id",null).eq("user_email",window.MY_EMAIL||"").order("created_at",{ascending:false}).limit(20); rows=(r.data||[]).reverse(); }catch(e){}
   if(!rows.length){ chatGreeting(); return; }
   $("chat-log").innerHTML="";
-  rows.forEach(function(m){ CHAT.push({role:m.role,content:m.content}); chatBubble(m.role==="user"?"user":"bot", m.content); });
+  rows.forEach(function(m){ CHAT.push({role:m.role,content:m.content}); chatBubble(m.role==="user"?"user":"bot", m.content, m.role!=="user"); });
 }
 async function sendChat(){
   const input=$("chat-input"); const text=(input.value||"").trim();
@@ -895,7 +940,7 @@ async function sendChat(){
   logChat(null,"user",text||("(" + (sent.length?sent.length+" photo"+(sent.length>1?"s":""):"photo") + ")"));
   const res=await askLinnaeus({mode:"chat", messages:api});
   $("chat-send").disabled=false; if(thinking&&thinking.remove) thinking.remove();
-  if(res && res.text){ CHAT.push({role:"assistant",content:res.text}); chatBubble("bot",res.text); logChat(null,"assistant",res.text); }
+  if(res && res.text){ CHAT.push({role:"assistant",content:res.text}); chatBubble("bot",res.text,true); logChat(null,"assistant",res.text); }
   else { chatBubble("bot",(res&&res.error)?res.error:"Something went wrong — try again."); }
   var i2=$("chat-input"); if(i2) i2.focus();
 }
@@ -1195,7 +1240,7 @@ window.askPlant=async function(){
 };
 function plantChatBubble(who, txt, isUser){
   return '<div style="margin:0 0 10px;font-size:13px;line-height:1.55;'+(isUser?'color:var(--gold);':'color:var(--cream);')+'">'
-    +'<span class="muted" style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;display:block;margin-bottom:3px;">'+who+'</span>'
+    +'<span class="muted" style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;display:block;margin-bottom:3px;">'+who+(isUser?'':' '+speakBtn(txt))+'</span>'
     +chatMd(txt)+'</div>';
 }
 function renderPlantChatHistory(chats){
@@ -1256,8 +1301,26 @@ async function loadAdmin(){
     <div class="section-t"><div class="label flank" style="justify-content:flex-start;">Daily report</div>
       <div style="margin-top:10px;"><input type="date" id="ad-day" value="${today}" onchange="renderReport(this.value)" style="width:auto;" /></div>
       <div id="ad-report" style="margin-top:12px;"><span class="muted">Loading…</span></div>
+    </div>
+    <div class="section-t"><div class="label flank" style="justify-content:flex-start;">Activity log</div>
+      <div class="fnote" style="margin-top:6px;">Who did what, and when — including opened, idle, and returned.</div>
+      <div id="ad-activity" style="margin-top:10px;"><span class="muted">Loading…</span></div>
     </div>`;
   renderReport(today);
+  renderActivity();
+}
+async function renderActivity(){
+  const box=$("ad-activity"); if(!box) return;
+  let rows=[];
+  try{ const r=await sb.from("activity_log").select("event,detail,user_name,created_at").order("created_at",{ascending:false}).limit(60); rows=r.data||[]; }catch(e){}
+  if(!rows.length){ box.innerHTML='<span class="muted" style="font-size:13px;">No activity yet.</span>'; return; }
+  const verb={opened:"opened the app",login:"signed in",add_plant:"added",care:"logged",edit:"edited",delete:"deleted",photo:"photographed",idle:"went idle",returned:"came back",left:"left the app"};
+  box.innerHTML = rows.map(function(a){
+    const when=new Date(a.created_at);
+    const t=when.toLocaleString(undefined,{month:"short",day:"numeric",hour:"numeric",minute:"2-digit"});
+    const d=(a.detail && ["opened","idle","returned","left"].indexOf(a.event)<0)?' <span style="color:var(--cream);">'+escHtml(a.detail)+'</span>':'';
+    return '<div style="display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding:8px 0;font-size:13px;"><span><span class="muted">'+escHtml(a.user_name||"Someone")+'</span> '+(verb[a.event]||escHtml(a.event))+d+'</span><span class="muted" style="font-size:11px;white-space:nowrap;">'+t+'</span></div>';
+  }).join("");
 }
 window.saveMyName=async function(){
   const name=($("ad-name").value||"").trim(), m=$("ad-name-msg");
@@ -1546,11 +1609,18 @@ window.logCare = async function(action){
   var res = await sb.from("care_log").insert(rec);
   if(res.error){ toast("Couldn't log: "+res.error.message); return; }
   toast(action + " logged.");
+  logActivity("care", action+(window.CURRENT_PLANT&&window.CURRENT_PLANT.unique_name?" · "+window.CURRENT_PLANT.unique_name:""));
   openPlant(currentPlantId);
 };
 
 
 /* ---------- Photos (snap / upload → timeline) ---------- */
+function photoDueNote(photos){
+  const days = (photos&&photos.length&&photos[0].created_at)? Math.floor((Date.now()-new Date(photos[0].created_at).getTime())/86400000) : null;
+  if(days===null) return '<div class="fnote warn" style="margin-top:8px;">📷 No photo yet — we photograph every 2 weeks.</div>';
+  if(days>=14) return '<div class="fnote warn" style="margin-top:8px;">📷 Photo due — last one '+days+' days ago (every 2 weeks).</div>';
+  return '';
+}
 function renderPhotoGrid(photos){
   if(!photos || !photos.length) return '<div class="muted" style="font-size:13px;">No photos yet. Tap “Add photo”.</div>';
   return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;">' +
@@ -1607,6 +1677,7 @@ async function handlePhoto(e){
   if(pl && !pl.cover_photo_url){ await sb.from("plant").update({ cover_photo_url: url }).eq("id", currentPlantId); }
   await fetchPlants();
   toast("Photo added.");
+  logActivity("photo", (window.CURRENT_PLANT&&window.CURRENT_PLANT.unique_name)?window.CURRENT_PLANT.unique_name:"a plant");
   openPlant(currentPlantId);
 }
 
@@ -1789,6 +1860,7 @@ window.savePlantEdit = async function(){
   if(res.error){ toast("Save failed: "+res.error.message); return; }
   await fetchPlants();
   toast("Saved.");
+  logActivity("edit", rec.unique_name||"a plant");
   openPlant(currentPlantId);
 };
 window.askDelete = function(){
@@ -1806,6 +1878,7 @@ window.deletePlant = async function(reason){
   if(res.error){ toast("Can't delete — does it have propagations? ("+res.error.message+")"); return; }
   await fetchPlants();
   toast("Deleted — "+(reason||"no reason"));
+  logActivity("delete", (p&&p.unique_name?p.unique_name+" · ":"")+(reason||"no reason"));
   go("collection");
 };
 
