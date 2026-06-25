@@ -78,7 +78,7 @@ sb.auth.onAuthStateChange((_e, session)=>{ session? showApp(session.user) : show
 sb.auth.getSession().then(({data})=>{ data.session? showApp(data.session.user) : showAuth(); });
 
 /* ---------- navigation ---------- */
-const views = ["today","collection","add","plant","supplies","admin","quick","chat"];
+const views = ["today","collection","add","plant","careplan","supplies","admin","quick","chat"];
 let LASTVIEW="today";
 function saveView(){ try{ localStorage.setItem("br_view", JSON.stringify({v:LASTVIEW,t:Date.now()})); }catch(e){} }
 function go(name){
@@ -657,7 +657,7 @@ async function submitAdd(e){
   $("f-photo-preview").style.display="none"; $("f-photo-prompt").style.display="block";
   resetAddVis(); applyAcq("");
   toast((rec.unique_name||"Plant")+" entered the collection.");
-  openPlant(data.id);
+  startCarePlan(data.id);   // Linnaeus reviews every intake and gives a care checklist
 }
 function val(id){ const v=$(id).value; return v&&v.trim()? v.trim():null; }
 function num(id){ const v=$(id).value; return v? Number(v):null; }
@@ -755,6 +755,8 @@ function renderPlant(p, mother, kids, care, photos, health){
       <div class="label flank">The Conservatory</div>
       <div class="roomnote" style="margin-top:10px;">${roomCareNote(p)}</div>
     </div>
+
+    ${renderPlantCarePlan(p)}
 
     ${specs.length?`<div class="section-t"><div class="label flank">Registry</div>
       <div class="specs">${specs.map(s=>`<div class="r"><span class="k">${s[0]}</span><span class="v">${s[1]}</span></div>`).join('')}</div></div>`:''}
@@ -880,6 +882,114 @@ async function sendChat(){
 window.sendChat=sendChat;
 
 function plantCtx(p){ p=p||{}; return {unique_name:p.unique_name,botanical_name:p.botanical_name,common_name:p.common_name,cultivar:p.cultivar,location_zone:p.location_zone,status:p.status,condition_at_intake:p.condition_at_intake,date_entered:p.date_entered}; }
+
+/* ---------- After-intake care plan (Linnaeus) ---------- */
+function carePlanCtx(p){ p=p||{}; return {
+  unique_name:p.unique_name, botanical_name:p.botanical_name, common_name:p.common_name, cultivar:p.cultivar,
+  location_zone:p.location_zone, status:p.status, condition_at_intake:p.condition_at_intake,
+  size_stage:p.size_stage, pot_type:p.pot_type, pot_size:p.pot_size, has_drainage:p.has_drainage,
+  last_repotted:p.last_repotted, medium:p.medium, light_type:p.light_type, light_hours:p.light_hours,
+  light_distance:p.light_distance, near_vent:p.near_vent, last_watered_bucket:p.last_watered_bucket,
+  acquisition_type:p.acquisition_type, date_entered:p.date_entered
+}; }
+window.startCarePlan = function(id){
+  go("careplan"); window.__carePlanId=id; window.__carePlanExtra=""; window.__cpPhoto=null;
+  const p=(CACHE||[]).find(x=>x.id===id);
+  if(!p){ openPlant(id); return; }
+  runCarePlan(p);
+};
+async function runCarePlan(p, extraImg){
+  const body=$("careplan-body"), sub=$("careplan-sub");
+  if(sub) sub.textContent = (p.unique_name||p.common_name||"New specimen")+" — Linnaeus is thinking…";
+  body.innerHTML = '<div style="padding:40px;text-align:center;"><span class="spin"></span><div class="muted" style="margin-top:12px;font-size:13px;">Reading the photo and your intake notes…</div></div>';
+  const payload={mode:"checklist", plant:carePlanCtx(p), image_url:p.cover_photo_url||undefined};
+  if(window.__carePlanExtra) payload.question = "Michi’s answers to your questions: "+window.__carePlanExtra;
+  if(extraImg){ payload.image_b64=extraImg.b64; payload.media_type=extraImg.media; payload.image_url=undefined; }
+  const v=await askLinnaeus(payload);
+  if(!v || v.error || !v.result){
+    body.innerHTML = '<div class="roomnote" style="border-left-color:var(--garnet);">'+(v&&v.error?("Linnaeus: "+escHtml(v.error)):"Couldn’t reach Linnaeus just now.")+'</div>'
+      +'<div style="margin-top:14px;display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-sm btn-gold" onclick="startCarePlan(\''+p.id+'\')">Try again</button><button class="btn btn-sm" onclick="carePlanDone()">Skip — view the plant</button></div>';
+    return;
+  }
+  const r=v.result;
+  if(r.need_more){ renderCarePlanQuestions(p, r); return; }
+  const plan={ summary:r.summary||"", items:(r.items||[]).map(it=>({task:it.task,why:it.why||"",when:it.when||"",priority:it.priority||"normal",done:false})), generated_at:new Date().toISOString() };
+  try{ await sb.from("plant").update({care_plan:plan}).eq("id",p.id); }catch(e){}
+  const pl=(CACHE||[]).find(x=>x.id===p.id); if(pl) pl.care_plan=plan;
+  renderCarePlanItems(p.id, plan);
+}
+function renderCarePlanQuestions(p, r){
+  const sub=$("careplan-sub"); if(sub) sub.textContent="Linnaeus needs a closer look";
+  const qs=(r.questions||[]).map(q=>`<li>${escHtml(q)}</li>`).join('');
+  const ph=(r.photo_requests||[]).map(q=>`<li>${escHtml(q)}</li>`).join('');
+  $("careplan-body").innerHTML =
+    '<div class="roomnote">'+(r.summary?escHtml(r.summary)+'<br><br>':'')
+    +(qs?'<div class="label" style="margin-bottom:6px;">A couple questions</div><ul style="margin:0 0 10px;padding-left:18px;font-size:13px;line-height:1.7;">'+qs+'</ul>':'')
+    +(ph?'<div class="label" style="margin-bottom:6px;">Photos that would help</div><ul style="margin:0;padding-left:18px;font-size:13px;line-height:1.7;">'+ph+'</ul>':'')
+    +'</div>'
+    +'<label class="field" style="margin-top:14px;">Your answer<textarea id="cp-answer" rows="3" placeholder="Answer what he asked — and/or add a photo below."></textarea></label>'
+    +'<div id="cp-photo-prev"></div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">'
+    +'<button class="btn btn-sm" onclick="cpAddPhoto()">+ Add a photo</button>'
+    +'<button class="btn btn-sm btn-gold" onclick="cpSendAnswer(\''+p.id+'\')">Send to Linnaeus</button>'
+    +'<button class="btn btn-sm" onclick="carePlanDone()">Skip — view the plant</button>'
+    +'</div>';
+}
+window.cpAddPhoto=function(){
+  const inp=document.createElement("input"); inp.type="file"; inp.accept="image/*";
+  inp.onchange=async e=>{ const f=e.target.files&&e.target.files[0]; if(!f) return;
+    const q=await checkPhotoQuality(f); if(!q.ok){ toast("Photo bounced — "+q.issues.join("; ")); return; }
+    const img=await fileToB64(f); if(!img){ toast("Couldn’t read photo."); return; }
+    window.__cpPhoto=img; const pv=$("cp-photo-prev"); if(pv) pv.innerHTML='<div class="fnote" style="margin-top:6px;">Photo attached — Linnaeus will look at it.</div>';
+  };
+  inp.click();
+};
+window.cpSendAnswer=async function(id){
+  const a=($("cp-answer")&&$("cp-answer").value||"").trim();
+  window.__carePlanExtra=a;
+  const p=(CACHE||[]).find(x=>x.id===id); if(!p){ carePlanDone(); return; }
+  const img=window.__cpPhoto; window.__cpPhoto=null;
+  await runCarePlan(p, img);
+};
+function carePlanRows(plantId, plan){
+  const items=plan.items||[];
+  if(!items.length) return '<div class="muted" style="font-size:13px;">No specific to-dos — it’s settled in beautifully.</div>';
+  return items.map((it,i)=>`
+    <label style="display:flex;gap:11px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--line);cursor:pointer;">
+      <input type="checkbox" ${it.done?'checked':''} onchange="toggleCarePlanItem('${plantId}',${i},this.checked)" style="width:auto;margin:3px 0 0;flex:0 0 auto;" />
+      <span style="flex:1;min-width:0;">
+        <span style="color:var(--cream);font-size:14px;${it.done?'text-decoration:line-through;opacity:.55;':''}">${escHtml(it.task)}</span>
+        ${it.why?`<span class="muted" style="display:block;font-size:12px;margin-top:3px;">${escHtml(it.why)}</span>`:''}
+      </span>
+      ${it.priority==='high'?'<span class="chip" style="border-color:var(--garnet);color:var(--garnet-bright);flex:0 0 auto;">now</span>':(it.when?`<span class="muted" style="font-size:11px;white-space:nowrap;margin-top:2px;flex:0 0 auto;">${escHtml(it.when)}</span>`:'')}
+    </label>`).join('');
+}
+function renderCarePlanItems(plantId, plan){
+  const sub=$("careplan-sub"); if(sub) sub.textContent = plan.summary || "Here’s the plan.";
+  $("careplan-body").innerHTML =
+    '<div class="roomnote" style="margin-bottom:6px;">✦ Linnaeus’ plan to get this specimen settled. Check items off as you go.</div>'
+    +'<div>'+carePlanRows(plantId, plan)+'</div>'
+    +'<div style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;">'
+    +'<button class="btn btn-primary btn-sm" onclick="carePlanDone()">Done — view the plant</button>'
+    +'<button class="btn btn-sm btn-gold" onclick="startCarePlan(\''+plantId+'\')">↻ Fresh plan</button>'
+    +'</div>';
+}
+function renderPlantCarePlan(p){
+  const head='<div class="section-t"><div class="label flank">Linnaeus’ Care Plan</div>';
+  const plan=p.care_plan;
+  if(!plan || !plan.items || !plan.items.length){
+    return head+'<div style="margin-top:10px;text-align:center;"><button class="btn btn-sm btn-gold" onclick="startCarePlan(\''+p.id+'\')">✦ Ask Linnaeus for a care plan</button></div></div>';
+  }
+  return head+(plan.summary?`<div class="roomnote" style="margin-top:10px;">${escHtml(plan.summary)}</div>`:'')
+    +'<div style="margin-top:6px;">'+carePlanRows(p.id, plan)+'</div>'
+    +'<div style="margin-top:12px;text-align:center;"><button class="btn btn-sm btn-gold" onclick="startCarePlan(\''+p.id+'\')">↻ Fresh plan</button></div></div>';
+}
+window.toggleCarePlanItem=async function(id, idx, done){
+  const p=(CACHE||[]).find(x=>x.id===id); if(!p||!p.care_plan||!p.care_plan.items||!p.care_plan.items[idx]) return;
+  p.care_plan.items[idx].done=done;
+  try{ await sb.from("plant").update({care_plan:p.care_plan}).eq("id",id); }catch(e){}
+};
+window.carePlanDone=function(){ const id=window.__carePlanId; if(id) openPlant(id); else go("today"); };
 async function linnaeusVerify(botanical, common, file){
   if(!file) return null;
   const img=await fileToB64(file); if(!img) return null;

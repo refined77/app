@@ -23,6 +23,7 @@ Everything grows in one AC-controlled grow room in a Houston home (USDA 9a/9b). 
 - Potting mixes (locked): base **House Mix** = 3 bark : 2 pumice/perlite : 1 coco coir : 1 charcoal : 1 worm castings. Climbing aroids: House Mix; velvet/thin-rooted Anthurium: chunkier, more bark + long-fiber sphagnum; Alocasia: +½ part coir, strong airflow, never soggy; Hoyas/epiphytes: chunkier, less coir, skip castings; semi-hydro LECA/Lechuza Pon: inert, weaker constant feed. Outdoor Aloe (exception): cactus mix 1:1 with pumice + coarse grit.
 - Aloe lives OUTDOORS (Houston: hot humid summers, heavy rain, winter freezes Dec–Feb).
 - Watering is ALWAYS "check, then water if dry," never a blind calendar.
+- Water / glass culture: some specimens are grown in a glass vessel in plain water (no soil) — props, rooting, and a few display pieces. For these: keep roots submerged and stems/leaves dry, change the water weekly (more in heat), add a weak hydroponic feed (~⅛ tsp/gal), watch for algae and rot, and rinse the glass. Moving a water-grown plant to soil (or the reverse) shocks the roots — transition deliberately. Semi-hydro (LECA / Lechuza Pon) is inert with a weak constant reservoir feed.
 When advice depends on something you don't know, ask the one clarifying question first — but stay brief.`;
 
 const CHAT_SYSTEM = `You are **Linnaeus** — the in-house botanist and brand steward for **Botanical Reverie**, a refined plant boutique operating as an endorsed brand under Refined 77 LLC ("Botanical Reverie — A Refined Company"). You advise the owner, Michi, inside her operations app. You are quietly expert, warm, and exact. You are not a generic chatbot; you carry this brand and this grow room in your bones.
@@ -61,6 +62,7 @@ Everything grows in one AC-controlled grow room in a Houston home (USDA 9a/9b). 
 - Potting mixes (locked): base **House Mix** = 3 bark : 2 pumice/perlite : 1 coco coir : 1 charcoal : 1 worm castings. Climbing aroids: House Mix; velvet/thin-rooted Anthurium: chunkier, more bark + long-fiber sphagnum; Alocasia: +½ part coir, strong airflow, never soggy; Hoyas/epiphytes: chunkier, less coir, skip castings; semi-hydro LECA/Lechuza Pon: inert, weaker constant feed. Outdoor Aloe (exception): cactus mix 1:1 with pumice + coarse grit.
 - Aloe lives OUTDOORS (Houston: hot humid summers, heavy rain, winter freezes Dec–Feb).
 - Watering is ALWAYS "check, then water if dry," never a blind calendar.
+- Water / glass culture: some specimens are grown in a glass vessel in plain water (no soil) — props, rooting, and a few display pieces. For these: keep roots submerged and stems/leaves dry, change the water weekly (more in heat), add a weak hydroponic feed (~⅛ tsp/gal), watch for algae and rot, and rinse the glass. Moving a water-grown plant to soil (or the reverse) shocks the roots — transition deliberately. Semi-hydro (LECA / Lechuza Pon) is inert with a weak constant reservoir feed.
 When advice depends on something you don't know, ask the one clarifying question first. Be the expert who anticipates the next need — but stay brief.
 
 # Flag things before you're asked
@@ -85,6 +87,12 @@ Reason in this order before you answer: (1) confirm/adjust the ID, (2) read leaf
   advise: `TASK — Tailored advice for THIS specific plant in our grow room. Answer in brand voice, SHORT and scannable (a few lines or tight bullets). Plain text — no JSON.`,
 
   today: `TASK — Morning brief: "what needs attention today" from the summary provided. Lead with the single most important thing, then 3–6 short bullets max. Plain text — no JSON.`,
+
+  checklist: `TASK — New-intake care plan. You are given everything we recorded about a plant we just took into the collection, plus its intake photo. Produce the specific to-do list to get THIS plant settled in our grow room — tied to its species, size/stage, pot type & size, drainage, soil, light, last-watered, last-repotted, condition, location, and the Houston season.
+First decide if you have enough to give a confident plan. If a photo would change your call (you can't see the roots, the soil surface, a suspected pest) or one key fact is missing, ASK: set need_more:true with the ONE or TWO most important questions and/or photo_requests. Otherwise set need_more:false and give the plan.
+Respond with ONLY minified JSON, no prose, no code fence:
+{"need_more":true|false,"questions":["..."],"photo_requests":["..."],"summary":"<one short line>","items":[{"task":"<imperative, concrete>","why":"<short reason tied to our conditions>","when":"now|this week|this month|ongoing","priority":"high|normal|low"}]}
+Rules: items are concrete actions for OUR grow room (never "monitor"); 2–6 items, most urgent first; if it just arrived and isn't cleared, include the 3–4 week quarantine; flag any non-compliant pot only if it's headed for display/photos. If a plant is grown in water/glass, give water-culture care, not soil care. If need_more:true, items may be []. Do not add or rename keys.`,
 };
 
 export async function onRequestPost(context) {
@@ -170,6 +178,14 @@ export async function onRequestPost(context) {
   if (p.location_zone) ctx.push(`Location/zone: ${p.location_zone}`);
   if (p.status) ctx.push(`Status: ${p.status}`);
   if (p.condition_at_intake) ctx.push(`Condition at intake: ${p.condition_at_intake}`);
+  if (p.size_stage) ctx.push(`Size / stage: ${p.size_stage}`);
+  if (p.pot_type) ctx.push(`Pot type: ${p.pot_type}${p.pot_size ? ` (${p.pot_size})` : ""}`);
+  if (p.has_drainage) ctx.push(`Drainage holes: ${p.has_drainage}`);
+  if (p.last_repotted) ctx.push(`Last repotted: ${p.last_repotted}`);
+  if (p.medium) ctx.push(`Soil / medium: ${p.medium}`);
+  if (p.light_type) ctx.push(`Light: ${[p.light_type, p.light_hours, p.light_distance, p.near_vent ? "near a fan/AC vent" : ""].filter(Boolean).join(" · ")}`);
+  if (p.last_watered_bucket) ctx.push(`Last watered fully: ${p.last_watered_bucket}`);
+  if (p.acquisition_type) ctx.push(`How it came to us: ${p.acquisition_type}`);
   if (p.date_entered) ctx.push(`Entered: ${p.date_entered}`);
 
   const parts = [];
@@ -182,7 +198,7 @@ export async function onRequestPost(context) {
 
   const content = [{ type: "text", text: parts.join("\n\n") }];
   if (imageBlock) content.push(imageBlock);
-  const maxTokens = (mode === "advise" || mode === "today") ? 700 : 400;
+  const maxTokens = (mode === "checklist") ? 900 : (mode === "advise" || mode === "today") ? 700 : 400;
 
   let upstream;
   try {
@@ -211,7 +227,7 @@ export async function onRequestPost(context) {
     ? data.content.filter((b) => b && b.type === "text").map((b) => b.text).join("").trim()
     : "";
 
-  if (mode === "verify" || mode === "diagnose" || mode === "identify") {
+  if (mode === "verify" || mode === "diagnose" || mode === "identify" || mode === "checklist") {
     const parsed = tryParseJson(text);
     if (!parsed) return json({ error: "Linnaeus gave an unreadable answer.", raw: text }, 502);
     return json({ mode, result: parsed });
